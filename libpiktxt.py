@@ -1,0 +1,1 @@
+# Library for parsing some Pikmin 2 Text files (often have the ending .txt)
