@@ -88,7 +88,7 @@ class WaterboxTxt(PikminTxt):
                 )
 
     def add_waterbox(self, *coords):
-        x1, y1, z1, x2, y2, z2 = coords
+        x1, y1, z1, x2, y2, z2 = (float(x) for x in coords)
 
         self.waterboxes.append([
             min(x1, x2), min(y1, y2), min(z1, z2),
@@ -110,20 +110,93 @@ class WaterboxTxt(PikminTxt):
         super().write(f, *args, **kwargs)
 
 
+# class for route files which keep the paths used by pikmin to carry back treasures
+class RouteTxt(PikminTxt):
+    def __init__(self):
+        super().__init__()
 
+        self.waypoints = []
+        self.links = {}
+
+    def add_link(self, waypoint_index, dest_waypoint_index):
+        if waypoint_index != dest_waypoint_index:
+            if waypoint_index not in self.links:
+                self.links[waypoint_index] = [dest_waypoint_index]
+            elif dest_waypoint_index not in self.links[waypoint_index]:
+                self.links[waypoint_index].append(dest_waypoint_index)
+
+    def add_waypoint(self, x, y, z, radius):
+        self.waypoints.append([x, y, z, radius])
+        return len(self.waypoints)-1
+
+    def from_file(self, f):
+        super().from_file(f)
+
+        self.waypoints = []
+        self.links = {}
+
+
+        waypoint_count = int(self._root[0])
+        assert waypoint_count == len(self._root) - 1
+
+        # Prefill waypoints with placeholder value so we can add waypoints at specific indices
+        self.waypoints.extend(None for x in range(waypoint_count))
+
+        if waypoint_count > 0:
+            for waypoint in self._root[1:]:
+                index = int(waypoint[0])
+                link_count = int(waypoint[1])
+                assert link_count == len(waypoint) - 3
+                assert index < len(self.waypoints)
+
+                for link in waypoint[2:-1]:
+                    assert int(link) < len(self.waypoints)
+                    self.add_link(index, int(link))
+
+                position = [float(x) for x in waypoint[-1]]
+
+                #self.waypoints.append(position)
+                self.waypoints[index] = position
+
+        assert None not in self.waypoints
+
+    def write(self, f, *args, **kwargs):
+        self._root = TextRoot()
+        self._root.append(len(self.waypoints))
+
+        for i, waypoint_pos in enumerate(self.waypoints):
+            waypoint_node = TextNode()
+            waypoint_node.append(i)  # waypoint index
+            if i in self.links:
+                waypoint_node.append(len(self.links[i]))
+                for link in self.links[i]:
+                    waypoint_node.append(link)
+            else:
+                waypoint_node.append(0)
+
+            waypoint_node.append(waypoint_pos)
+            self._root.append(waypoint_node)
+
+        super().write(f, *args, **kwargs)
 
 if __name__ == "__main__":
     import os
     import pprint
 
-    pikmintext = WaterboxTxt()
-    input_path = os.path.join("examples", "waterbox.txt")
+    pikmintext = RouteTxt()
+
+    input_path = os.path.join("examples", "route.txt")
     output_pat = input_path+"new.txt"
+
     with open(input_path, "r", encoding="shift-jis") as f:
         print("parsing", input_path)
         pikmintext.from_file(f)
-    #pprint.pprint(pikmintext.root)
-    #print(pikmintext.waterboxes)
+
+    print(pikmintext.waypoints)
+
+    wp = pikmintext.add_waypoint(10, 20, 30, 1337)
+    for i in range(15):
+        pikmintext.add_link(wp, wp-i)
     with open(output_pat, "w") as f:
         pikmintext.write(f)
 
