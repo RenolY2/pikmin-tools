@@ -196,66 +196,6 @@ class BWMapViewer(QWidget):
     def zoom_factor(self):
         return self._zoom_factor/10.0
 
-    def choose_entity(self, entityid):
-        self.current_entity = entityid
-
-        self.update()
-
-    def set_show_terrain_mode(self, mode):
-        if mode not in (SHOW_TERRAIN_NO_TERRAIN, SHOW_TERRAIN_REGULAR, SHOW_TERRAIN_LIGHT):
-            raise RuntimeError("No such mode:", mode)
-        else:
-            print("Terrain mode was", self.show_terrain_mode, "will be set to", mode)
-            self.show_terrain_mode = mode
-
-    def move_entity(self, entityid, x, y):
-        # Update the position of an entity
-        self.entities[entityid][0] = x
-        self.entities[entityid][1] = y
-
-    def add_entities(self, entities):
-        for x, y, entityid, entitytype in entities:
-            #self.entities.append((x, y, entityid))
-            self.entities[entityid] = [x, y, entitytype, None]
-
-    def remove_entity(self, entityid):
-        # If the entity is selected, unselect it before deleting it.
-        if self.current_entity is not None:
-            if entityid == self.current_entity:
-                self.current_entity = None
-
-        del self.entities[entityid]
-
-    def rename_entity(self, oldid, newid):
-        # We do not allow renaming an entity to a different name that already exists
-        assert newid == oldid or newid not in self.entities
-
-        if newid != oldid:
-
-            self.entities[newid] = copy(self.entities[oldid])
-            if self.current_entity == oldid:
-                self.current_entity = newid
-            del self.entities[oldid]
-            self.update()
-        else:
-            pass # Don't need to do anything if the old id is the same as the new id
-
-    def add_waypoint(self, x, z, index, update=True, metadata=None):
-        #self.entities.append((x, y, random.randint(10, 50)))
-        assert index not in self.waypoints
-        self.waypoints[index] = [x, z, metadata]
-
-        # In case lots of entities are added at once, update can be set to False to avoid
-        # redrawing the widget too much.
-        if update:
-            self.update()
-
-    def add_path(self, wp1_index, wp2_index):
-        assert wp1_index in self.waypoints
-        assert wp2_index in self.waypoints
-
-        self.paths.append((wp1_index, wp2_index))
-
     def zoom(self, fac):
         if (self.zoom_factor + fac) > 0.1 and (self.zoom_factor + fac) <= 25:
             self._zoom_factor += int(fac*10)
@@ -270,73 +210,6 @@ class BWMapViewer(QWidget):
                 if self.terrain_scaled is None:
                     self.terrain_scaled = self.terrain
                 self.terrain_scaled = self.terrain_scaled.scaled(self.height(), self.width())"""
-
-    def draw_entity(self, painter, x, y, size, zf, entityid, metadata):
-        #print(x,y,size, type(x), type(y), type(size), metadata)
-        if metadata is not None and "angle" in metadata and "angle2" in metadata:
-            if entityid == self.current_entity:
-                angle = metadata["angle"]
-                angle2 = metadata["angle2"]
-
-                center = QPoint(x,y)
-                pen = painter.pen()
-                prevwidth = pen.width()
-                prevcolor = pen.color()
-                pen.setColor(DEFAULT_ANGLE_MARKER)
-                pen.setWidth(int(4))
-                painter.setPen(pen)
-                line1 = rotate(x, y-int(60*(zf/8.0)), x, y, angle)
-                line2 = rotate(x, y-int(40*(zf/8.0)), x, y, angle2)
-
-                painter.drawLine(center, line1)
-                pen.setColor(prevcolor)
-                pen.setWidth(prevwidth)
-                painter.setPen(pen)
-                painter.drawLine(center, line2)
-        painter.drawRect(x-size//2, y-size//2, size, size)
-
-    def draw_box(self, painter, x, y, size, zf, entityid, metadata, polycache):
-        #painter.drawRect(x-size//2, y-size//2, size, size)
-        if metadata is not None:
-            width = metadata["width"]*zf
-            length = metadata["length"]*zf
-            #print("drawing")
-
-            if (entityid not in polycache or
-                        width != polycache[entityid][1] or length != polycache[entityid][2]
-                        or x != polycache[entityid][3] or y != polycache[entityid][4]
-                        or metadata["angle"] != polycache[entityid][5]):
-
-                angle = metadata["angle"]
-                p1 = rotate(x-width//2, y-length//2, x, y, angle)
-                p2 = rotate(x-width//2, y+length//2, x, y, angle)#QPoint(x-width//2, y+length//2)
-                p3 = rotate(x+width//2, y+length//2, x, y, angle)#QPoint(x+width//2, y+length//2)
-                p4 = rotate(x+width//2, y-length//2, x, y, angle)#QPoint(x+width//2, y-length//2)
-                polygon = QPolygon([p1, p2, p3, p4,
-                                    p1])
-                polycache[entityid] = [polygon, width, length, x, y, angle]
-                pass
-            else:
-                pass
-                polygon = polycache[entityid][0]
-
-
-            #painter.rotate(45)
-            radius = metadata["radius"]*zf
-            if radius != 0.0:
-                painter.drawArc(x-radius//2, y-radius//2, radius, radius, 0, 16*360)
-            painter.drawPolyline(polygon)
-
-            #painter.rotate(-45)
-
-    def set_metadata(self, entityid, metadata):
-        self.entities[entityid][3] = metadata
-
-    def set_terrain(self, terrain, light_image):
-        self.terrain = QPixmap.fromImage(terrain)
-        self.light_terrain = QPixmap.fromImage(light_image)
-        #self.terrain_scaled = self.terrain.scaled(self.height(), self.width())
-
 
     @catch_exception
     def paintEvent(self, event):
@@ -353,9 +226,6 @@ class BWMapViewer(QWidget):
         zf = self.zoom_factor
         current_entity = self.current_waypoint
         last_color = None
-        drawbox = self.draw_box
-        drawentity = self.draw_entity
-        polycache = self.polygon_cache
         draw_bound = event.rect().adjusted(-ENTITY_SIZE//2, -ENTITY_SIZE//2, ENTITY_SIZE//2, ENTITY_SIZE//2)
         #contains = draw_bound.contains
         selected_entities = self.selected_waypoints
@@ -430,14 +300,17 @@ class BWMapViewer(QWidget):
             if 0 <= z <= h:
                 p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
 
+
+
         if self.pikmin_routes is not None:
             selected = self.selected_waypoints
+            waypoints = self.pikmin_routes.waypoints
+            links = self.pikmin_routes.links
             #for waypoint, wp_info in self.waypoints.items():
-            for i, wp_info in self.pikminroutes
-                x,z, metadata = wp_info
-                y, radius = metadata
+            for wp_index, wp_data in waypoints.items():
+                x,y,z,radius = wp_data
                 color = DEFAULT_ENTITY
-                if waypoint in selected:
+                if wp_index in selected:
                     print("vhanged")
                     color = QColor("red")
 
@@ -469,44 +342,44 @@ class BWMapViewer(QWidget):
             prevwidth = pen.width()
             pen.setWidth(5)
             p.setPen(pen)
-            for start_wp, end_wp in self.paths:
-
-
-                startx, startz = self.waypoints[start_wp][:2]#(val for val in self.waypoints[start_wp][:2])
-                endx, endz = self.waypoints[end_wp][:2]#(val for val in self.waypoints[end_wp][:2])
-
+            #for start_wp, end_wp in self.paths:
+            for start_wp, linksto in links.items():
+                startx, y, startz, radius = waypoints[start_wp]
                 startx = (startx-midx)*scalex
                 startz = (startz-midz)*scalez
-                endx = (endx-midx)*scalex
-                endz = (endz-midz)*scalez
 
-                p.drawLine(QPoint(startx, startz),
-                           QPoint(endx, endz))
+                startpoint = QPoint(startx, startz)
 
-                #angle = degrees(atan2(endx-startx, endz-startz))
-                angle = degrees(atan2(endz-startz, endx-startx))
+                for end_wp in linksto:
+                    endx, y, endz, radius = waypoints[end_wp]
 
+                    endx = (endx-midx)*scalex
+                    endz = (endz-midz)*scalez
 
+                    p.drawLine(startpoint,
+                               QPoint(endx, endz))
 
+                    #angle = degrees(atan2(endx-startx, endz-startz))
+                    angle = degrees(atan2(endz-startz, endx-startx))
 
-                centerx, centery = (endx)*0.8 + (startx)*0.2, \
-                                   (endz)*0.8 + (startz)*0.2
-                p1 = rotate(centerx-15, centery, centerx, centery, angle+40)
-                p2 = rotate(centerx-15, centery, centerx, centery, angle-40)
-                #p.setPen(QColor("green"))
-                """pen = p.pen()
-                pen.setColor(QColor("blue"))
-                prevwidth = pen.width()
-                pen.setWidth(3)
-                p.setPen(pen)
-                p.drawLine(QPoint(centerx, centery),
-                           p1)
-                p.drawLine(QPoint(centerx, centery),
-                           p2)
-                pen.setColor(DEFAULT_ENTITY)
-                pen.setWidth(prevwidth)
-                p.setPen(pen)"""
-                arrows.append((QPoint(centerx, centery), p1, p2))
+                    centerx, centery = (endx)*0.8 + (startx)*0.2, \
+                                       (endz)*0.8 + (startz)*0.2
+                    p1 = rotate(centerx-15, centery, centerx, centery, angle+40)
+                    p2 = rotate(centerx-15, centery, centerx, centery, angle-40)
+                    #p.setPen(QColor("green"))
+                    """pen = p.pen()
+                    pen.setColor(QColor("blue"))
+                    prevwidth = pen.width()
+                    pen.setWidth(3)
+                    p.setPen(pen)
+                    p.drawLine(QPoint(centerx, centery),
+                               p1)
+                    p.drawLine(QPoint(centerx, centery),
+                               p2)
+                    pen.setColor(DEFAULT_ENTITY)
+                    pen.setWidth(prevwidth)
+                    p.setPen(pen)"""
+                    arrows.append((QPoint(centerx, centery), p1, p2))
             pen = p.pen()
             pen.setColor(QColor("green"))
             pen.setWidth(4)
@@ -552,8 +425,10 @@ class BWMapViewer(QWidget):
             selectionbox_polygon = QPolygon([QPoint(p1x, p1z), QPoint(p2x, p2z), QPoint(p3x, p3z),
                                              QPoint(p1x, p1z)])
             p.drawPolyline(selectionbox_polygon)
+
         p.end()
         end = default_timer()
+
         print("time taken:", end-start, "sec")
 
         if end-start < 1/90.0:
@@ -639,14 +514,14 @@ class BWMapViewer(QWidget):
 
             self.selectionbox_start = (selectstartx, selectstartz)
 
-            for waypoint, waypointdata in self.waypoints.items():
-                way_x, way_z, meta = waypointdata
-                radius = meta[1]*scalex
+            for wp_index, wp_data in self.pikmin_routes.waypoints.items():
+                way_x, y, way_z, radius = wp_data
+                radius = radius*scalex
 
                 x, z = (way_x - midx)*scalex, (way_z - midz)*scalez
                 #print("checking", abs(x-mouse_x), abs(z-mouse_z), radius)
                 if abs(x-mouse_x) < radius/2.0 and abs(z-mouse_z) < radius/2.0:
-                    self.selected_waypoints = [waypoint]
+                    self.selected_waypoints = [wp_index]
                     print("hit")
                     self.select_update.emit(event)
                     self.update()
@@ -756,18 +631,13 @@ class BWMapViewer(QWidget):
                 selectendz = selectstartz
                 selectstartz = tmp
 
-            selectstartx
-
-            #self.selectionbox_start = (selectstartx, selectstartz)
-
-
             selected = []
 
-            for waypoint, waypointdata in self.waypoints.items():
-                way_x, way_z, meta = waypointdata
+            for wp_index, wp_data in self.pikmin_routes.waypoints.items():
+                way_x, y, way_z, meta = wp_data
 
                 if selectstartx <= way_x <= selectendx and selectstartz <= way_z <= selectendz:
-                    selected.append(waypoint)
+                    selected.append(wp_index)
 
             self.selected_waypoints = selected
             self.select_update.emit(event)
