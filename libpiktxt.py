@@ -132,6 +132,9 @@ class RouteTxt(PikminTxt):
 
             self.links[waypoint_index].remove(dest_waypoint_index)
 
+            if len(self.links[waypoint_index]) == 0:
+                del self.links[waypoint_index]
+
 
     def add_waypoint(self, x, y, z, radius):
         indices = sorted(self.waypoints.keys())
