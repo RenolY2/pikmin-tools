@@ -18,19 +18,6 @@ from helper_functions import calc_zoom_in_factor, calc_zoom_out_factor
 
 ENTITY_SIZE = 10
 
-COLORS = {
-    "cAirVehicle": QColor("yellow"),
-    "cGroundVehicle": QColor(180, 50, 0),#QColor("brown"),
-    "cTroop": QColor("blue"),
-    "cMapZone": QColor("grey"),
-    "cCamera": QColor("violet"),
-    "cWaypoint": QColor("cyan"),
-    "cSceneryCluster": QColor(90, 40, 40)
-}
-
-MAPZONECOLORS = {
-    "ZONETYPE_MISSIONBOUNDARY": QColor("light green")
-}
 DEFAULT_ENTITY = QColor("black")
 DEFAULT_MAPZONE = QColor("grey")
 DEFAULT_SELECTED = QColor("red")
@@ -40,7 +27,10 @@ SHOW_TERRAIN_NO_TERRAIN = 0
 SHOW_TERRAIN_REGULAR = 1
 SHOW_TERRAIN_LIGHT = 2
 
-#MOSUE_
+MOUSE_MODE_NONE = 0
+MOUSE_MODE_MOVEWP = 1
+MOUSE_MODE_ADDWP = 2
+MOUSE_MODE_CONNECTWP = 3
 
 def catch_exception(func):
     def handle(*args, **kwargs):
@@ -148,6 +138,13 @@ class BWMapViewer(QWidget):
 
         self.pikmin_routes = None
 
+        self.mousemode = MOUSE_MODE_NONE
+
+        self.connect_first_wp = None
+        self.connect_second_wp = None
+
+
+
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
 
@@ -189,8 +186,20 @@ class BWMapViewer(QWidget):
 
         self.pikmin_routes = None
 
+        self.mousemode = MOUSE_MODE_NONE
+        self.connect_first_wp = None
+        self.connect_second_wp = None
+
     def set_collision(self, verts, faces):
         self.collision = Collision(verts, faces)
+
+    def set_mouse_mode(self, mode):
+        assert mode in (MOUSE_MODE_NONE, MOUSE_MODE_ADDWP, MOUSE_MODE_CONNECTWP, MOUSE_MODE_MOVEWP)
+
+        self.connect_first_wp = None
+        self.connect_second_wp = None
+
+        self.mousemode = mode
 
     @property
     def zoom_factor(self):
@@ -513,18 +522,18 @@ class BWMapViewer(QWidget):
             selectstartz = mouse_z/scalez + midz
 
             self.selectionbox_start = (selectstartx, selectstartz)
+            if self.pikmin_routes is not None:
+                for wp_index, wp_data in self.pikmin_routes.waypoints.items():
+                    way_x, y, way_z, radius = wp_data
+                    radius = radius*scalex
 
-            for wp_index, wp_data in self.pikmin_routes.waypoints.items():
-                way_x, y, way_z, radius = wp_data
-                radius = radius*scalex
-
-                x, z = (way_x - midx)*scalex, (way_z - midz)*scalez
-                #print("checking", abs(x-mouse_x), abs(z-mouse_z), radius)
-                if abs(x-mouse_x) < radius/2.0 and abs(z-mouse_z) < radius/2.0:
-                    self.selected_waypoints = [wp_index]
-                    print("hit")
-                    self.select_update.emit(event)
-                    self.update()
+                    x, z = (way_x - midx)*scalex, (way_z - midz)*scalez
+                    #print("checking", abs(x-mouse_x), abs(z-mouse_z), radius)
+                    if abs(x-mouse_x) < radius/2.0 and abs(z-mouse_z) < radius/2.0:
+                        self.selected_waypoints = [wp_index]
+                        print("hit")
+                        self.select_update.emit(event)
+                        self.update()
 
         if event.buttons() & Qt.MiddleButton and not self.mid_button_down:
             self.mid_button_down = True
@@ -632,12 +641,12 @@ class BWMapViewer(QWidget):
                 selectstartz = tmp
 
             selected = []
+            if self.pikmin_routes is not None:
+                for wp_index, wp_data in self.pikmin_routes.waypoints.items():
+                    way_x, y, way_z, meta = wp_data
 
-            for wp_index, wp_data in self.pikmin_routes.waypoints.items():
-                way_x, y, way_z, meta = wp_data
-
-                if selectstartx <= way_x <= selectendx and selectstartz <= way_z <= selectendz:
-                    selected.append(wp_index)
+                    if selectstartx <= way_x <= selectendx and selectstartz <= way_z <= selectendz:
+                        selected.append(wp_index)
 
             self.selected_waypoints = selected
             self.select_update.emit(event)
@@ -784,115 +793,24 @@ class ActionWithOwner(QAction):
     def triggered_with_owner(self):
         self.triggered_owner.emit(self.action_owner)
 
-
-
-
-
-class BWEntityXMLEditor(QMdiSubWindow):
-    triggered = pyqtSignal(object)
-    closing = pyqtSignal(object)
-
+class CheckableButton(QPushButton):
     def __init__(self, *args, **kwargs):
-        if "windowtype" in kwargs:
-            self.windowname = kwargs["windowtype"]
-            del kwargs["windowtype"]
-        else:
-            self.windowname = "XML Object"
-
         super().__init__(*args, **kwargs)
 
-        self.resize(900, 500)
-        self.setMinimumSize(QSize(300, 300))
+        self.ispushed = False
+        self.unpushed_text = None
 
-        self.centralwidget = QWidget(self)
-        self.setWidget(self.centralwidget)
-        self.entity = None
+    def setPushed(self, pushed):
 
-        font = QFont()
-        font.setFamily("Consolas")
-        font.setStyleHint(QFont.Monospace)
-        font.setFixedPitch(True)
-        font.setPointSize(10)
-
-
-        self.dummywidget = QWidget(self)
-        self.dummywidget.setMaximumSize(0,0)
-
-        self.verticalLayout = QVBoxLayout(self.centralwidget)
-        self.verticalLayout.addWidget(self.dummywidget)
+        if pushed is True and self.ispushed is False:
+            self.unpushed_text = self.text()
+            self.setText("[ {} ]".format(self.unpushed_text))
+            self.ispushed = True
+        elif self.ispushed is True:
+            self.setText(self.unpushed_text)
+            self.ispushed = False
 
 
-        self.goto_id_action = ActionWithOwner("Go To ID", self, action_owner=self)
-
-        self.addAction(self.goto_id_action)
-
-        self.goto_shortcut = QKeySequence(Qt.CTRL+Qt.Key_G)
-
-
-        self.goto_id_action.setShortcut(self.goto_shortcut)
-        #self.goto_id_action.setShortcutContext(Qt.WidgetShortcut)
-        self.goto_id_action.setAutoRepeat(False)
-
-        self.goto_id_action.triggered_owner.connect(self.open_new_window)
-
-        self.textbox_xml = XMLTextEdit(self.centralwidget)
-        self.button_xml_savetext = QPushButton(self.centralwidget)
-        self.button_xml_savetext.setText("Save XML")
-        self.button_xml_savetext.setMaximumWidth(400)
-        self.textbox_xml.setLineWrapMode(QTextEdit.NoWrap)
-        self.textbox_xml.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.textbox_xml.customContextMenuRequested.connect(self.my_context_menu)
-
-        metrics = QFontMetrics(font)
-        self.textbox_xml.setTabStopWidth(4 * metrics.width(' '))
-        self.textbox_xml.setFont(font)
-
-        self.verticalLayout.addWidget(self.textbox_xml)
-        self.verticalLayout.addWidget(self.button_xml_savetext)
-        self.setWindowTitle(self.windowname)
-
-    def set_content(self, xmlnode):
-        try:
-            self.textbox_xml.setText(etree.tostring(xmlnode, encoding="unicode"))
-            self.entity = xmlnode.get("id")
-        except:
-            traceback.print_exc()
-
-    def open_new_window(self, owner):
-        #print("It was pressed!", owner)
-        #print("selected:", owner.textbox_xml.textCursor().selectedText())
-
-        self.triggered.emit(self)
-
-    def my_context_menu(self, position):
-        try:
-            #print("Triggered!")
-            #print(event.x(), event.y())
-            #print(args)
-            context_menu = self.textbox_xml.createStandardContextMenu()
-            context_menu.addAction(self.goto_id_action)
-            context_menu.exec(self.mapToGlobal(position))
-            context_menu.destroy()
-            del context_menu
-            #self.context_menu.exec(event.globalPos())
-            #return super().contextMenuEvent(event)
-        except:
-            traceback.print_exc()
-
-    def get_content(self):
-        try:
-            content = self.textbox_xml.toPlainText()
-            xmlnode = etree.fromstring(content)
-
-            return xmlnode
-        except:
-            traceback.print_exc()
-
-    def set_title(self, objectname):
-        self.setWindowTitle("{0} - {1}".format(self.windowname, objectname))
-
-    def reset(self):
-        pass
 
 def collides(face_v1, face_v2, face_v3, box_mid_x, box_mid_z, box_size_x, box_size_z):
     min_x = min(face_v1[0], face_v2[0], face_v3[0]) - box_mid_x
