@@ -68,6 +68,13 @@ class EditorMainWindow(QMainWindow):
         self.button_add_waypoint.pressed.connect(self.action_button_add_wp)
         self.button_connect_waypoints.pressed.connect(self.action_button_connect_wp)
 
+        self.lineedit_xcoordinate.editingFinished.connect(self.action_lineedit_change_x)
+        self.lineedit_ycoordinate.editingFinished.connect(self.action_lineedit_change_y)
+        self.lineedit_zcoordinate.editingFinished.connect(self.action_lineedit_change_z)
+        self.lineedit_radius.editingFinished.connect(self.action_lineedit_change_radius)
+
+        self.pikminroutes_screen.connect_update.connect(self.action_connect_waypoints)
+        self.pikminroutes_screen.move_points.connect(self.action_move_waypoints)
         """
         self.level = None
         path = get_default_path()
@@ -143,108 +150,13 @@ class EditorMainWindow(QMainWindow):
 
 
         self.resetting = False
+        self.button_delete_waypoints.setDisabled(False)
+        self.button_add_waypoint.setPushed(False)
+        self.button_connect_waypoints.setPushed(False)
+        self.button_move_waypoints.setPushed(False)
+
 
         print("reset done")
-
-    def destroy_xml_editor(self, id):
-        pass
-
-    @catch_exception
-    def open_xml_editor(self, objectid, offsetx=0, offsety=0):
-        selected = objectid
-        if self.level is not None and selected in self.level.obj_map:
-            delete = []
-            for objid, window in self.xml_windows.items():
-                if not window.isVisible() and objid != selected:
-                    window.destroy()
-                    delete.append(objid)
-            for objid in delete:
-                del self.xml_windows[objid]
-
-            if selected == self.basexmlobject_textbox.entity or selected == self.xmlobject_textbox.entity:
-                pass # No need to make a new window
-            elif selected in self.xml_windows and self.xml_windows[selected].isVisible():
-                self.xml_windows[selected].activateWindow()
-                self.xml_windows[selected].update()
-
-            else:
-                xml_window = BWEntityXMLEditor()
-
-                def xmleditor_save_object_unlimited():
-                    self.statusbar.showMessage("Saving object changes...")
-                    try:
-                        xmlnode = xml_window.get_content()
-                        #assert self.bw_map_screen.current_entity == self.basexmlobject_textbox.entity
-                        assert xml_window.entity == xmlnode.get("id")  # Disallow changing the id of the base object
-
-                        self.level.remove_object(xmlnode.get("id"))
-                        self.level.add_object(xmlnode)
-
-                        self.statusbar.showMessage("Saved base object {0} as {1}".format(
-                            xml_window.entity, self.level.obj_map[xmlnode.get("id")].name))
-                    except:
-                        self.statusbar.showMessage("Saving object failed")
-                        traceback.print_exc()
-
-                xml_window.button_xml_savetext.pressed.connect(xmleditor_save_object_unlimited)
-                xml_window.triggered.connect(self.action_open_xml_editor_unlimited)
-
-
-                obj = self.level.obj_map[selected]
-                xml_window.set_title(obj.name)
-
-                xml_window.set_content(obj._xml_node)
-                #xml_window.move(QPoint(xml_editor_owner.pos().x()+20, xml_editor_owner.pos().y()+20))
-                xml_window.move(QPoint(offsetx, offsety))
-
-                xml_window.show()
-                xml_window.update()
-                self.xml_windows[selected] = xml_window
-
-
-
-    @catch_exception
-    def action_open_xml_editor_unlimited(self, xml_editor_owner):
-        selected = xml_editor_owner.textbox_xml.textCursor().selectedText()
-        self.open_xml_editor(selected,
-                             offsetx=xml_editor_owner.pos().x()+20,
-                             offsety=xml_editor_owner.pos().y()+20)
-
-    @catch_exception
-    def action_open_basexml_editor(self):
-        """
-        if not self.basexmlobject_textbox.isVisible():
-            self.basexmlobject_textbox.destroy()
-            self.basexmlobject_textbox = BWEntityXMLEditor(windowtype="XML Base Object")
-            self.basexmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_base_object_xml)
-            self.basexmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
-            self.basexmlobject_textbox.show()
-
-        self.basexmlobject_textbox.activateWindow()"""
-        if self.level is not None and self.bw_map_screen.current_entity is not None:
-            obj = self.level.obj_map[self.bw_map_screen.current_entity]
-            if not obj.has_attr("mBase"):
-                pass
-            else:
-                baseobj = self.level.obj_map[obj.get_attr_value("mBase")]
-                #self.basexmlobject_textbox.set_title(baseobj.id)
-                self.open_xml_editor(baseobj.id)
-
-    def xmleditor_action_save_base_object_xml(self):
-        self.statusbar.showMessage("Saving base object changes...")
-        try:
-            xmlnode = self.basexmlobject_textbox.get_content()
-            #assert self.bw_map_screen.current_entity == self.basexmlobject_textbox.entity
-            assert self.basexmlobject_textbox.entity == xmlnode.get("id")  # Disallow changing the id of the base object
-
-            self.level.remove_object(xmlnode.get("id"))
-            self.level.add_object(xmlnode)
-
-            self.statusbar.showMessage("Saved base object {0} as {1}".format(
-                self.basexmlobject_textbox.entity, self.level.obj_map[xmlnode.get("id")].name))
-        except:
-            self.statusbar.showMessage("Saving base object failed")
-            traceback.print_exc()
 
     def button_load_level(self):
         try:
@@ -445,6 +357,7 @@ class EditorMainWindow(QMainWindow):
             self.pikminroutes_screen.selected_waypoints = {}
             self.pikminroutes_screen.update()
 
+
     def action_button_ground_wp(self):
         if self.pikmin_routes is not None and self.pikminroutes_screen.collision is not None:
             for wp in self.pikminroutes_screen.selected_waypoints:
@@ -498,6 +411,68 @@ class EditorMainWindow(QMainWindow):
             self.button_connect_waypoints.setPushed(True)
             self.pikminroutes_screen.set_mouse_mode(custom_widgets.MOUSE_MODE_CONNECTWP)
             self.button_delete_waypoints.setDisabled(True)
+
+    def action_lineedit_change_x(self):
+        try:
+            value = float(self.lineedit_xcoordinate.text())
+        except Exception as e:
+            print(e)
+        else:
+            if len(self.pikminroutes_screen.selected_waypoints) == 1:
+                for wp in self.pikminroutes_screen.selected_waypoints:
+                    self.pikmin_routes.waypoints[wp][0] = value
+                self.pikminroutes_screen.update()
+    def action_lineedit_change_y(self):
+        try:
+            value = float(self.lineedit_ycoordinate.text())
+        except Exception as e:
+            print(e)
+        else:
+            if len(self.pikminroutes_screen.selected_waypoints) == 1:
+                for wp in self.pikminroutes_screen.selected_waypoints:
+                    self.pikmin_routes.waypoints[wp][1] = value
+                self.pikminroutes_screen.update()
+    def action_lineedit_change_z(self):
+        try:
+            value = float(self.lineedit_zcoordinate.text())
+        except Exception as e:
+            print(e)
+        else:
+            if len(self.pikminroutes_screen.selected_waypoints) == 1:
+                for wp in self.pikminroutes_screen.selected_waypoints:
+                    self.pikmin_routes.waypoints[wp][2] = value
+                self.pikminroutes_screen.update()
+    def action_lineedit_change_radius(self):
+        try:
+            value = float(self.lineedit_radius.text())
+        except Exception as e:
+            print(e)
+        else:
+            if len(self.pikminroutes_screen.selected_waypoints) == 1:
+                for wp in self.pikminroutes_screen.selected_waypoints:
+                    self.pikmin_routes.waypoints[wp][3] = value
+                self.pikminroutes_screen.update()
+
+    @catch_exception
+    def action_connect_waypoints(self, firstwp, secondwp):
+        if self.pikmin_routes is not None:
+            if firstwp in self.pikmin_routes.links:
+                if secondwp in self.pikmin_routes.links[firstwp]:
+                    self.pikmin_routes.remove_link(firstwp, secondwp)
+                else:
+                    self.pikmin_routes.add_link(firstwp, secondwp)
+            else:
+                self.pikmin_routes.add_link(firstwp, secondwp)
+            self.pikminroutes_screen.update()
+
+    @catch_exception
+    def action_move_waypoints(self, deltax, deltaz):
+        if self.pikmin_routes is not None:
+            for wp in self.pikminroutes_screen.selected_waypoints:
+                self.pikmin_routes.waypoints[wp][0] += deltax
+                self.pikmin_routes.waypoints[wp][2] += deltaz
+            self.pikminroutes_screen.update()
+
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")

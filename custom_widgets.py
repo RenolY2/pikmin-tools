@@ -70,6 +70,8 @@ class BWMapViewer(QWidget):
     mouse_wheel = pyqtSignal(QWheelEvent)
     position_update = pyqtSignal(QMouseEvent, tuple)
     select_update = pyqtSignal(QMouseEvent)
+    move_points = pyqtSignal(float, float)
+    connect_update = pyqtSignal(int, int)
     ENTITY_SIZE = ENTITY_SIZE
 
 
@@ -143,6 +145,7 @@ class BWMapViewer(QWidget):
         self.connect_first_wp = None
         self.connect_second_wp = None
 
+        self.move_startpos = None
 
 
     def set_visibility(self, visibility):
@@ -189,6 +192,8 @@ class BWMapViewer(QWidget):
         self.mousemode = MOUSE_MODE_NONE
         self.connect_first_wp = None
         self.connect_second_wp = None
+
+        self.move_startpos = None
 
     def set_collision(self, verts, faces):
         self.collision = Collision(verts, faces)
@@ -342,6 +347,7 @@ class BWMapViewer(QWidget):
                     prevwidth = pen.width()
                     pen.setWidth(2)
                     p.setPen(pen)
+                    radius *= 2
                     p.drawArc(x-radius//2, z-radius//2, radius, radius, 0, 16*360)
                     pen.setWidth(prevwidth)
                     p.setPen(pen)
@@ -509,47 +515,61 @@ class BWMapViewer(QWidget):
         scalez = (h/viewportheight)#/2.0
         # Set up end
         # -------------
-        if event.buttons() & Qt.LeftButton and not self.left_button_down:
-            self.left_button_down = True
-            #self.last_pos = (event.x(), event.y())
-            mouse_x, mouse_z = (event.x(), event.y()) #self.drag_last_pos
-            #offsetx, offsetz = (self.origin_x)+self.offset_x, self.origin_z+self.offset_z
-            zf = self.zoom_factor
-            #scale = 4.0/zf
-
-
+        if (event.buttons() & Qt.LeftButton and not self.left_button_down):
+            mouse_x, mouse_z = (event.x(), event.y())
             selectstartx = mouse_x/scalex + midx
             selectstartz = mouse_z/scalez + midz
 
-            self.selectionbox_start = (selectstartx, selectstartz)
+            if (self.mousemode == MOUSE_MODE_MOVEWP or self.mousemode == MOUSE_MODE_NONE):
+                self.left_button_down = True
+                self.selectionbox_start = (selectstartx, selectstartz)
+
             if self.pikmin_routes is not None:
+                hit = False
                 for wp_index, wp_data in self.pikmin_routes.waypoints.items():
                     way_x, y, way_z, radius = wp_data
                     radius = radius*scalex
 
                     x, z = (way_x - midx)*scalex, (way_z - midz)*scalez
                     #print("checking", abs(x-mouse_x), abs(z-mouse_z), radius)
-                    if abs(x-mouse_x) < radius/2.0 and abs(z-mouse_z) < radius/2.0:
+                    if abs(x-mouse_x) < radius and abs(z-mouse_z) < radius:
                         self.selected_waypoints = [wp_index]
                         print("hit")
+                        hit = True
                         self.select_update.emit(event)
+
+                        if self.connect_first_wp is not None and self.mousemode == MOUSE_MODE_CONNECTWP:
+                            self.connect_update.emit(self.connect_first_wp, wp_index)
+                        self.connect_first_wp = wp_index
+                        self.move_startpos = (way_x, way_z)
                         self.update()
+                        break
+
+                if not hit:
+                    self.selected_waypoints = []
+                    self.select_update.emit(event)
+                    self.connect_first_wp = None
+                    self.move_startpos = None
+                    self.update()
+
+
+
 
         if event.buttons() & Qt.MiddleButton and not self.mid_button_down:
             self.mid_button_down = True
             self.drag_last_pos = (event.x(), event.y())
 
-        if event.buttons() & Qt.RightButton and self.collision is not None:
-            self.right_button_down = True
+        if event.buttons() & Qt.RightButton and self.mousemode == MOUSE_MODE_MOVEWP:
             mouse_x, mouse_z = (event.x(), event.y())
-            mapx = mouse_x/scalex + midx
-            mapz = mouse_z/scalez + midz
+            movetox = mouse_x/scalex + midx
+            movetoz = mouse_z/scalez + midz
 
-            res = self.collision.collide_ray_downwards(mapx, mapz)
+            if self.move_startpos is not None:
+                x,z = self.move_startpos
 
-            if res is not None:
-                self.highlighttriangle = res[1:]
-                self.update()
+                self.move_points.emit(movetox-x, movetoz-z)
+
+                self.move_startpos = (movetox, movetoz)
 
         #elif event.buttons() == Qt.LeftButton and self.left_button_down:
         #    # Drag the screen!
@@ -641,12 +661,24 @@ class BWMapViewer(QWidget):
                 selectstartz = tmp
 
             selected = []
+            centerx, centerz = 0, 0
+            print("Stuff here")
             if self.pikmin_routes is not None:
                 for wp_index, wp_data in self.pikmin_routes.waypoints.items():
                     way_x, y, way_z, meta = wp_data
 
+
+
                     if selectstartx <= way_x <= selectendx and selectstartz <= way_z <= selectendz:
+                        centerx += way_x
+                        centerz += way_z
                         selected.append(wp_index)
+            if len(selected) == 0:
+                self.move_startpos = None
+            else:
+                count = float(len(selected))
+                self.move_startpos = (centerx/count, centerz/count)
+                print(self.move_startpos, "wuw")
 
             self.selected_waypoints = selected
             self.select_update.emit(event)
