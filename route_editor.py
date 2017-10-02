@@ -28,9 +28,9 @@ import PyQt5.QtCore as QtCore
 from res_tools.bw_archive_base import BWArchiveBase
 
 from lib.bw_read_xml import BattWarsLevel, BattWarsObject"""
-
+import custom_widgets
 from custom_widgets import (MenuDontClose, BWMapViewer,
-                            catch_exception,
+                            catch_exception, CheckableButton,
                             SHOW_TERRAIN_LIGHT, SHOW_TERRAIN_NO_TERRAIN, SHOW_TERRAIN_REGULAR)
 
 from opengltext import TempRenderWindow
@@ -61,6 +61,13 @@ class EditorMainWindow(QMainWindow):
         self.default_collision_path = ""
         self.pikmin_routes = None
         self.collision = None
+
+        self.button_delete_waypoints.pressed.connect(self.action_button_delete_wp)
+        self.button_ground_waypoints.pressed.connect(self.action_button_ground_wp)
+        self.button_move_waypoints.pressed.connect(self.action_button_move_wp)
+        self.button_add_waypoint.pressed.connect(self.action_button_add_wp)
+        self.button_connect_waypoints.pressed.connect(self.action_button_connect_wp)
+
         """
         self.level = None
         path = get_default_path()
@@ -430,6 +437,68 @@ class EditorMainWindow(QMainWindow):
         self.statusbar.showMessage(coordtext)
         #print(coordtext)
 
+    @catch_exception
+    def action_button_delete_wp(self):
+        if self.pikmin_routes is not None:
+            for wp in self.pikminroutes_screen.selected_waypoints:
+                self.pikmin_routes.remove_waypoint(wp)
+            self.pikminroutes_screen.selected_waypoints = {}
+            self.pikminroutes_screen.update()
+
+    def action_button_ground_wp(self):
+        if self.pikmin_routes is not None and self.pikminroutes_screen.collision is not None:
+            for wp in self.pikminroutes_screen.selected_waypoints:
+                x, y, z, radius = self.pikmin_routes.waypoints[wp]
+
+                result = self.pikminroutes_screen.collision.collide_ray_downwards(x, z, y=y)
+
+                if result is not None:
+                    point, v1, v2, v3 = result
+                    height = point[1]
+
+                    self.pikmin_routes.waypoints[wp][1] = height
+
+            self.pikminroutes_screen.update()
+
+    def action_button_move_wp(self):
+        if self.button_move_waypoints.ispushed:
+
+            self.button_move_waypoints.setPushed(False)
+            self.pikminroutes_screen.set_mouse_mode(custom_widgets.MOUSE_MODE_NONE)
+            self.button_delete_waypoints.setDisabled(False)
+        else:
+            self.button_add_waypoint.setPushed(False)
+            self.button_move_waypoints.setPushed(True)
+            self.button_connect_waypoints.setPushed(False)
+            self.pikminroutes_screen.set_mouse_mode(custom_widgets.MOUSE_MODE_MOVEWP)
+            self.button_delete_waypoints.setDisabled(True)
+
+    def action_button_add_wp(self):
+        if self.button_add_waypoint.ispushed:
+
+            self.button_add_waypoint.setPushed(False)
+            self.pikminroutes_screen.set_mouse_mode(custom_widgets.MOUSE_MODE_NONE)
+            self.button_delete_waypoints.setDisabled(False)
+        else:
+            self.button_add_waypoint.setPushed(True)
+            self.button_move_waypoints.setPushed(False)
+            self.button_connect_waypoints.setPushed(False)
+            self.pikminroutes_screen.set_mouse_mode(custom_widgets.MOUSE_MODE_ADDWP)
+            self.button_delete_waypoints.setDisabled(True)
+
+    def action_button_connect_wp(self):
+        if self.button_connect_waypoints.ispushed:
+
+            self.button_connect_waypoints.setPushed(False)
+            self.pikminroutes_screen.set_mouse_mode(custom_widgets.MOUSE_MODE_NONE)
+            self.button_delete_waypoints.setDisabled(False)
+        else:
+            self.button_add_waypoint.setPushed(False)
+            self.button_move_waypoints.setPushed(False)
+            self.button_connect_waypoints.setPushed(True)
+            self.pikminroutes_screen.set_mouse_mode(custom_widgets.MOUSE_MODE_CONNECTWP)
+            self.button_delete_waypoints.setDisabled(True)
+
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(930, 850)
@@ -463,11 +532,11 @@ class EditorMainWindow(QMainWindow):
         self.verticalLayout = QVBoxLayout(self.vertLayoutWidget)
         self.verticalLayout.setObjectName("verticalLayout")
 
-        self.button_add_waypoint = QPushButton(self.centralwidget)
+        self.button_add_waypoint = CheckableButton(self.centralwidget)
         self.button_delete_waypoints = QPushButton(self.centralwidget)
-        self.button_select_waypoints = QPushButton(self.centralwidget)
-        self.button_move_waypoints = QPushButton(self.centralwidget)
-        self.button_connect_waypoints = QPushButton(self.centralwidget)
+        self.button_ground_waypoints = QPushButton(self.centralwidget)
+        self.button_move_waypoints = CheckableButton(self.centralwidget)
+        self.button_connect_waypoints = CheckableButton(self.centralwidget)
 
         self.lineedit_xcoordinate = QLineEdit(self.centralwidget)
         self.lineedit_ycoordinate = QLineEdit(self.centralwidget)
@@ -477,7 +546,7 @@ class EditorMainWindow(QMainWindow):
 
         self.verticalLayout.addWidget(self.button_add_waypoint)
         self.verticalLayout.addWidget(self.button_delete_waypoints)
-        self.verticalLayout.addWidget(self.button_select_waypoints)
+        self.verticalLayout.addWidget(self.button_ground_waypoints)
         self.verticalLayout.addWidget(self.button_move_waypoints)
         self.verticalLayout.addWidget(self.button_connect_waypoints)
 
@@ -544,7 +613,7 @@ class EditorMainWindow(QMainWindow):
         self.button_connect_waypoints.setText("Connect Waypoint")
         self.button_delete_waypoints.setText("Delete Waypoint(s)")
         self.button_move_waypoints.setText("Move Waypoint(s)")
-        self.button_select_waypoints.setText("Select Waypoint(s)")
+        self.button_ground_waypoints.setText("Ground Waypoint(s)")
         self.collision_menu.setTitle("Collision")
         """self.button_clone_entity.setText(_translate("MainWindow", "Clone Entity"))
         self.button_remove_entity.setText(_translate("MainWindow", "Delete Entity"))
