@@ -59,7 +59,8 @@ class EditorMainWindow(QMainWindow):
         else:
             self.default_path = path
         self.default_collision_path = ""
-        self.pikmin_routes = None
+        self.pikmin_routes = RouteTxt()
+        self.pikminroutes_screen.pikmin_routes = self.pikmin_routes
         self.collision = None
 
         self.button_delete_waypoints.pressed.connect(self.action_button_delete_wp)
@@ -75,6 +76,7 @@ class EditorMainWindow(QMainWindow):
 
         self.pikminroutes_screen.connect_update.connect(self.action_connect_waypoints)
         self.pikminroutes_screen.move_points.connect(self.action_move_waypoints)
+        self.pikminroutes_screen.create_waypoint.connect(self.action_create_waypoint)
         """
         self.level = None
         path = get_default_path()
@@ -180,35 +182,8 @@ class EditorMainWindow(QMainWindow):
                         self.default_path = filepath
                         set_default_path(filepath)
 
-                        """for wp_index, waypoint in enumerate(self.pikmin_routes.waypoints):
-                            x,y,z, radius = waypoint
-                            self.pikminroutes_screen.add_waypoint(x, z, wp_index, update=False, metadata=[y, radius])
-
-                        for wp_index, waypoints in self.pikmin_routes.links.items():
-                            for dest_waypoint in waypoints:
-                                self.pikminroutes_screen.add_path(wp_index, dest_waypoint)"""
-
                         self.pikminroutes_screen.pikmin_routes = self.pikmin_routes
                         self.pikminroutes_screen.update()
-
-                        #for obj_id, obj in sorted(self.level.obj_map.items(),
-                        #                          key=lambda x: get_type(x[1].type)+x[1].type+x[1].id):
-                        if False:
-                            #print("doing", obj_id)
-                            if get_position_attribute(obj) is None:
-                                continue
-                            #if not obj.has_attr("Mat"):
-                            #    continue
-                            x, y, angle = object_get_position(self.level, obj_id)
-                            assert type(x) != str
-                            x, y = bw_coords_to_image_coords(x, y)
-
-                            item = BWEntityEntry(obj_id, "{0}[{1}]".format(obj_id, obj.type))
-                            self.entity_list_widget.addItem(item)
-
-                            self.bw_map_screen.add_entity(x, y, obj_id, obj.type, update=False)
-                            #if obj.type == "cMapZone":
-                            update_mapscreen(self.bw_map_screen, obj)
 
                         print("ok")
                         #self.bw_map_screen.update()
@@ -225,29 +200,21 @@ class EditorMainWindow(QMainWindow):
         print("loaded")
 
     def button_save_level(self):
-        if self.level is not None:
+        try:
+            print("ok", self.default_path)
+
             filepath, choosentype = QFileDialog.getSaveFileName(
                 self, "Save File",
                 self.default_path,
-                BW_LEVEL+";;"+BW_COMPRESSED_LEVEL+";;All files (*)")
-            print(filepath, "saved")
+                PIKMIN2PATHS+";;All files (*)")
 
+            print("doooone")
             if filepath:
-                # Simiar to load level
-                if choosentype == BW_COMPRESSED_LEVEL or filepath.endswith(".gz"):
-                    file_open = gzip.open
-                else:
-                    file_open = open
-                try:
-                    with file_open(filepath, "wb") as f:
-                        self.level._tree.write(f)
-                except Exception as error:
-                    print("COULDN'T SAVE:", error)
-                    traceback.print_exc()
-
+                with open(filepath, "w") as f:
+                    self.pikmin_routes.write(f)
                 self.default_path = filepath
-        else:
-            pass # no level loaded, do nothing
+        except Exception as err:
+            traceback.print_exc()
 
 
     def button_load_collision(self):
@@ -352,6 +319,7 @@ class EditorMainWindow(QMainWindow):
     @catch_exception
     def action_button_delete_wp(self):
         if self.pikmin_routes is not None:
+            print("removing", self.pikminroutes_screen.selected_waypoints)
             for wp in self.pikminroutes_screen.selected_waypoints:
                 self.pikmin_routes.remove_waypoint(wp)
             self.pikminroutes_screen.selected_waypoints = {}
@@ -472,6 +440,20 @@ class EditorMainWindow(QMainWindow):
                 self.pikmin_routes.waypoints[wp][0] += deltax
                 self.pikmin_routes.waypoints[wp][2] += deltaz
             self.pikminroutes_screen.update()
+    @catch_exception
+    def action_create_waypoint(self, x, z):
+        if self.pikminroutes_screen.collision is None:
+            y = 100
+        else:
+            result = self.pikminroutes_screen.collision.collide_ray_downwards(x, z)
+            if result is None:
+                y = 100
+            else:
+                u1, y, u2 = result[0]
+        radius = 100
+        self.pikmin_routes.add_waypoint(x, y, z, radius)
+        self.pikminroutes_screen.update()
+        print("created")
 
 
     def setupUi(self, MainWindow):
