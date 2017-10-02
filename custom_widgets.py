@@ -357,6 +357,7 @@ class BWMapViewer(QWidget):
             pen = p.pen()
             prevwidth = pen.width()
             pen.setWidth(5)
+            pen.setColor(DEFAULT_ENTITY)
             p.setPen(pen)
             #for start_wp, end_wp in self.paths:
             for start_wp, linksto in links.items():
