@@ -72,6 +72,7 @@ class BWMapViewer(QWidget):
     select_update = pyqtSignal(QMouseEvent)
     move_points = pyqtSignal(float, float)
     connect_update = pyqtSignal(int, int)
+    create_waypoint = pyqtSignal(float, float)
     ENTITY_SIZE = ENTITY_SIZE
 
 
@@ -451,50 +452,6 @@ class BWMapViewer(QWidget):
 
     @catch_exception
     def mousePressEvent(self, event):
-        #x,y = event.localPos()
-        #if event.x() < self.height() and event.y() < self.width:
-
-        """print(event.x(), event.y())
-        event_x, event_y = event.x(), event.y()
-        hit = False
-        search_start = default_timer()
-
-        if self.zoom_factor > 1:
-            ENTITY_SIZE = int(self.ENTITY_SIZE * (1 + self.zoom_factor/10.0))
-        else:
-            ENTITY_SIZE = self.ENTITY_SIZE
-
-        if event.buttons() == Qt.LeftButton:
-            entities_hit = []
-            toggle = self.visibility_toggle
-            for entity, data in self.entities.items():
-                x, y, entitytype, metadata = data
-                x *= self.zoom_factor
-                y *= self.zoom_factor
-                if entitytype in toggle and toggle[entitytype] is False:
-                    continue
-                if ((x + ENTITY_SIZE//2) > event_x > (x - ENTITY_SIZE//2)
-                    and (y + ENTITY_SIZE//2) > event_y > (y - ENTITY_SIZE//2)):
-                    #hit = True
-                    entities_hit.append(entity)
-
-            print("we got it")
-            if len(entities_hit) > 0:
-                if self.next_selected_index > (len(entities_hit) - 1):
-                    self.next_selected_index = 0
-                entity = entities_hit[self.next_selected_index]
-
-                search_end = default_timer()
-                print("time for search:", search_end-search_start, "sec")
-                self.next_selected_index = (self.next_selected_index+1) % len(entities_hit)
-                self.entity_clicked.emit(event, entity)
-            else:
-                self.mouse_clicked.emit(event)
-        else:
-            self.mouse_clicked.emit(event)"""
-
-
-        # -----------------------
         # Set up values for checking if the mouse hit a node
         offsetx, offsetz = (-self.origin_x-self.origin_x-self.offset_x,
                             -self.origin_z-self.origin_z-self.offset_z)
@@ -559,30 +516,25 @@ class BWMapViewer(QWidget):
             self.mid_button_down = True
             self.drag_last_pos = (event.x(), event.y())
 
-        if event.buttons() & Qt.RightButton and self.mousemode == MOUSE_MODE_MOVEWP:
-            mouse_x, mouse_z = (event.x(), event.y())
-            movetox = mouse_x/scalex + midx
-            movetoz = mouse_z/scalez + midz
+        if event.buttons() & Qt.RightButton:
+            if self.mousemode == MOUSE_MODE_MOVEWP:
+                mouse_x, mouse_z = (event.x(), event.y())
+                movetox = mouse_x/scalex + midx
+                movetoz = mouse_z/scalez + midz
 
-            if self.move_startpos is not None:
-                x,z = self.move_startpos
+                if self.move_startpos is not None:
+                    x,z = self.move_startpos
 
-                self.move_points.emit(movetox-x, movetoz-z)
+                    self.move_points.emit(movetox-x, movetoz-z)
 
-                self.move_startpos = (movetox, movetoz)
+                    self.move_startpos = (movetox, movetoz)
+            elif self.mousemode == MOUSE_MODE_ADDWP:
+                mouse_x, mouse_z = (event.x(), event.y())
+                destx = mouse_x/scalex + midx
+                destz = mouse_z/scalez + midz
 
-        #elif event.buttons() == Qt.LeftButton and self.left_button_down:
-        #    # Drag the screen!
-        #    """x, y = event.x(), event.y()
-        #    d_x, d_y  = x - self.last_pos[0], y - self.last_pos[1]
-        #    self.offset_x += d_x
-        #    self.offset_z += d_y"""
-        #else:
-        #    self.left_button_down = False
-        #    self.last_pos = None
+                self.create_waypoint.emit(destx, destz)
 
-
-        #self.mouse_clicked.emit(event)
     @catch_exception
     def mouseMoveEvent(self, event):
         offsetx, offsetz = (-self.origin_x-self.origin_x-self.offset_x,
@@ -752,64 +704,6 @@ class MenuDontClose(QMenu):
                 QMenu.mouseReleaseEvent(self, e)
         except:
             traceback.print_exc()
-
-
-class BWEntityEntry(QListWidgetItem):
-    def __init__(self, xml_ref, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.xml_ref = xml_ref
-
-
-class BWEntityListWidget(QListWidget):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def select_item(self, pos):
-        #item = self.item(pos)
-        self.setCurrentRow(pos)
-
-
-class BWPassengerWindow(QMdiSubWindow):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setBaseSize(400, 400)
-
-        self.centralwidget = QWidget(self)
-        self.setWidget(self.centralwidget)
-
-        layout = QHBoxLayout(self.centralwidget)
-        self.passengerlist = QListWidget(self.centralwidget)
-        layout.addWidget(self.passengerlist)
-        self.setWindowTitle("Passengers")
-
-    def reset(self):
-        self.passengerlist.clearSelection()
-        self.passengerlist.clear()
-
-    def add_passenger(self, passenger_name, passenger_id):
-        item = BWEntityEntry(passenger_id,
-                             passenger_name)
-        self.passengerlist.addItem(item)
-
-    def set_title(self, entityname):
-        self.setWindowTitle("Passengers - {0}".format(entityname))
-
-
-class XMLTextEdit(QTextEdit):
-    #mouse_clicked = pyqtSignal(QMouseEvent)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        """self.goto_id_action = QAction("Go To ID", self)
-        self.goto_shortcut = QKeySequence(Qt.CTRL+Qt.Key_G)
-        self.goto_id_action.setShortcut(self.goto_shortcut)
-        self.goto_id_action.setShortcutContext(Qt.WidgetShortcut)"""
-
-        #self.context_menu.exec(event.globalPos())
-        #self.context_menu.destroy()
-
 
 class ActionWithOwner(QAction):
     triggered_owner = pyqtSignal(object)
