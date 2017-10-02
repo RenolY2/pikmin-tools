@@ -115,7 +115,7 @@ class RouteTxt(PikminTxt):
     def __init__(self):
         super().__init__()
 
-        self.waypoints = []
+        self.waypoints = {}
         self.links = {}
 
     def add_link(self, waypoint_index, dest_waypoint_index):
@@ -125,14 +125,49 @@ class RouteTxt(PikminTxt):
             elif dest_waypoint_index not in self.links[waypoint_index]:
                 self.links[waypoint_index].append(dest_waypoint_index)
 
+    def remove_link(self, waypoint_index, dest_waypoint_index):
+        if waypoint_index != dest_waypoint_index:
+            assert waypoint_index in self.links
+            assert dest_waypoint_index in self.links[waypoint_index]
+
+            self.links[waypoint_index].remove(dest_waypoint_index)
+
+
     def add_waypoint(self, x, y, z, radius):
-        self.waypoints.append([x, y, z, radius])
-        return len(self.waypoints)-1
+        indices = sorted(self.waypoints.keys())
+
+        newindex = None
+
+        if len(indices) == 0:
+            self.waypoints[0] = [x,y,z,radius]
+            newindex = 0
+        else:
+            biggest = indices[-1]
+
+            newindex = None
+            for i in range(biggest+2):
+                if i not in self.waypoints:
+                    newindex = i
+                    self.waypoints[i] = [x,y,z,radius]
+                    break
+
+        assert newindex is not None
+
+        return newindex
+
+    def remove_waypoint(self, index):
+        del self.waypoints[index]
+        del self.links[index]
+
+        # Remove all links pointing to the index
+        for link, linksto in self.links.items():
+            if index in linksto:
+                linksto.remove(index)
 
     def from_file(self, f):
         super().from_file(f)
 
-        self.waypoints = []
+        self.waypoints = {}
         self.links = {}
 
 
@@ -140,17 +175,19 @@ class RouteTxt(PikminTxt):
         assert waypoint_count == len(self._root) - 1
 
         # Prefill waypoints with placeholder value so we can add waypoints at specific indices
-        self.waypoints.extend(None for x in range(waypoint_count))
+        #self.waypoints.extend(None for x in range(waypoint_count))
+
+
 
         if waypoint_count > 0:
             for waypoint in self._root[1:]:
                 index = int(waypoint[0])
                 link_count = int(waypoint[1])
                 assert link_count == len(waypoint) - 3
-                assert index < len(self.waypoints)
+                #assert index < len(self.waypoints)
 
                 for link in waypoint[2:-1]:
-                    assert int(link) < len(self.waypoints)
+                    #assert int(link) < len(self.waypoints)
                     self.add_link(index, int(link))
 
                 position = [float(x) for x in waypoint[-1]]
@@ -162,15 +199,15 @@ class RouteTxt(PikminTxt):
 
     def write(self, f, *args, **kwargs):
         self._root = TextRoot()
-        self._root.append(len(self.waypoints))
+        self._root.append([len(self.waypoints), "# waypoint count"])
 
-        for i, waypoint_pos in enumerate(self.waypoints):
+        for i, waypoint_pos in self.waypoints.items():
             waypoint_node = TextNode()
-            waypoint_node.append(i)  # waypoint index
+            waypoint_node.append([i, "# index"])  # waypoint index
             if i in self.links:
-                waypoint_node.append(len(self.links[i]))
-                for link in self.links[i]:
-                    waypoint_node.append(link)
+                waypoint_node.append([len(self.links[i]), "# numLinks"])
+                for j, link in enumerate(self.links[i]):
+                    waypoint_node.append([link, "# link {}".format(j)])
             else:
                 waypoint_node.append(0)
 
@@ -178,6 +215,7 @@ class RouteTxt(PikminTxt):
             self._root.append(waypoint_node)
 
         super().write(f, *args, **kwargs)
+
 
 if __name__ == "__main__":
     import os
@@ -197,6 +235,11 @@ if __name__ == "__main__":
     wp = pikmintext.add_waypoint(10, 20, 30, 1337)
     for i in range(15):
         pikmintext.add_link(wp, wp-i)
+        pikmintext.add_link(wp-i, wp)
     with open(output_pat, "w") as f:
         pikmintext.write(f)
+    pikmintext.remove_waypoint(wp)
+    with open(output_pat+"2.txt", "w") as f:
+        pikmintext.write(f)
+
 
