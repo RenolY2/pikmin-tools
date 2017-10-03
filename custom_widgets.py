@@ -83,7 +83,7 @@ class BWMapViewer(QWidget):
         self._zoom_factor = 10
 
         self.SIZEX = 1024#768#1024
-        self.SIZEY = 1366#768#1024
+        self.SIZEY = 1024#768#1024
 
 
         self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
@@ -146,8 +146,8 @@ class BWMapViewer(QWidget):
         self.connect_first_wp = None
         self.connect_second_wp = None
 
-        self.move_startpos = None
-
+        self.move_startpos = []
+        self.overlapping_wp_index = 0
 
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
@@ -155,12 +155,13 @@ class BWMapViewer(QWidget):
     def reset(self):
         del self.waypoints
         del self.paths
+        self.overlapping_wp_index = 0
 
         self.waypoints = {}
         self.paths = []
 
         self.SIZEX = 1024#768#1024
-        self.SIZEY = 1366
+        self.SIZEY = 1024
         self.origin_x = self.SIZEX//2
         self.origin_z = self.SIZEY//2
 
@@ -183,8 +184,8 @@ class BWMapViewer(QWidget):
         self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
 
         self.level_image = None
-        del self.collision
-        self.collision = None
+        #del self.collision
+        #self.collision = None
 
         self.highlighttriangle = None
 
@@ -194,7 +195,7 @@ class BWMapViewer(QWidget):
         self.connect_first_wp = None
         self.connect_second_wp = None
 
-        self.move_startpos = None
+        self.move_startpos = []
 
     def set_collision(self, verts, faces):
         self.collision = Collision(verts, faces)
@@ -492,30 +493,38 @@ class BWMapViewer(QWidget):
 
             if self.pikmin_routes is not None:
                 hit = False
+                all_hit_waypoints = []
                 for wp_index, wp_data in self.pikmin_routes.waypoints.items():
-                    way_x, y, way_z, radius = wp_data
-                    radius = radius*scalex
+                    way_x, y, way_z, radius_actual = wp_data
+                    radius = radius_actual*scalex
 
-                    x, z = (way_x - midx)*scalex, (way_z - midz)*scalez
+                    #x, z = (way_x - midx)*scalex, (way_z - midz)*scalez
+                    x, z = selectstartx, selectstartz
                     #print("checking", abs(x-mouse_x), abs(z-mouse_z), radius)
-                    if abs(x-mouse_x) < radius and abs(z-mouse_z) < radius:
-                        self.selected_waypoints = [wp_index]
-                        print("hit")
-                        hit = True
-                        self.select_update.emit(event)
+                    #if abs(x-mouse_x) < radius and abs(z-mouse_z) < radius:
+                    if ((x-way_x)**2 + (z-way_z)**2)**0.5 < radius_actual:
+                        all_hit_waypoints.append(wp_index)
 
-                        if self.connect_first_wp is not None and self.mousemode == MOUSE_MODE_CONNECTWP:
-                            self.connect_update.emit(self.connect_first_wp, wp_index)
-                        self.connect_first_wp = wp_index
-                        self.move_startpos = (way_x, way_z)
-                        self.update()
-                        break
+                if len(all_hit_waypoints) > 0:
+                    wp_index = all_hit_waypoints[self.overlapping_wp_index%len(all_hit_waypoints)]
+                    self.selected_waypoints = [wp_index]
+                    print("hit")
+                    hit = True
+                    self.select_update.emit(event)
+
+                    if self.connect_first_wp is not None and self.mousemode == MOUSE_MODE_CONNECTWP:
+                        self.connect_update.emit(self.connect_first_wp, wp_index)
+                    self.connect_first_wp = wp_index
+                    self.move_startpos = [wp_index]
+                    self.update()
+                    self.overlapping_wp_index = (self.overlapping_wp_index+1)%len(all_hit_waypoints)
+
 
                 if not hit:
                     self.selected_waypoints = []
                     self.select_update.emit(event)
                     self.connect_first_wp = None
-                    self.move_startpos = None
+                    self.move_startpos = []
                     self.update()
 
 
@@ -533,12 +542,20 @@ class BWMapViewer(QWidget):
                 movetox = mouse_x/scalex + midx
                 movetoz = mouse_z/scalez + midz
 
-                if self.move_startpos is not None:
-                    x,z = self.move_startpos
+                if len(self.move_startpos) > 0:
+                    sumx,sumz = 0, 0
+                    wpcount = len(self.move_startpos)
+                    waypoints = self.pikmin_routes.waypoints
+                    for wp_index in self.move_startpos:
+                        sumx += waypoints[wp_index][0]
+                        sumz += waypoints[wp_index][2]
+
+                    x = sumx/float(wpcount)
+                    z = sumz/float(wpcount)
 
                     self.move_points.emit(movetox-x, movetoz-z)
 
-                    self.move_startpos = (movetox, movetoz)
+                    #self.move_startpos = (movetox, movetoz)
             elif self.mousemode == MOUSE_MODE_ADDWP:
                 mouse_x, mouse_z = (event.x(), event.y())
                 destx = mouse_x/scalex + midx
@@ -624,7 +641,7 @@ class BWMapViewer(QWidget):
                 selectstartz = tmp
 
             selected = []
-            centerx, centerz = 0, 0
+            #centerx, centerz = 0, 0
             print("Stuff here")
             if self.pikmin_routes is not None:
                 for wp_index, wp_data in self.pikmin_routes.waypoints.items():
@@ -637,32 +654,40 @@ class BWMapViewer(QWidget):
                                 (way_z - radius) <= selectstartz and selectendz <= (way_z+radius)
                     ):
 
-                        centerx += way_x
-                        centerz += way_z
+                        #centerx += way_x
+                        #centerz += way_z
                         selected.append(wp_index)
 
             if len(selected) == 0:
-                self.move_startpos = None
+                self.move_startpos = []
             else:
                 count = float(len(selected))
-                self.move_startpos = (centerx/count, centerz/count)
+                self.move_startpos = selected
                 print(self.move_startpos, "wuw")
 
             self.selected_waypoints = selected
             self.select_update.emit(event)
             self.update()
+
         if self.right_button_down:
             if self.mousemode == MOUSE_MODE_MOVEWP:
                 mouse_x, mouse_z = (event.x(), event.y())
                 movetox = mouse_x/scalex + midx
                 movetoz = mouse_z/scalez + midz
 
-                if self.move_startpos is not None:
-                    x,z = self.move_startpos
+                if len(self.move_startpos) > 0:
+                    sumx,sumz = 0, 0
+                    wpcount = len(self.move_startpos)
+                    waypoints = self.pikmin_routes.waypoints
+                    for wp_index in self.move_startpos:
+                        sumx += waypoints[wp_index][0]
+                        sumz += waypoints[wp_index][2]
+
+                    x = sumx/float(wpcount)
+                    z = sumz/float(wpcount)
 
                     self.move_points.emit(movetox-x, movetoz-z)
 
-                    self.move_startpos = (movetox, movetoz)
         if True:#self.highlighttriangle is not None:
             mouse_x, mouse_z = (event.x(), event.y())
             mapx = mouse_x/scalex + midx
@@ -950,12 +975,8 @@ class Collision(object):
                   (normal[0]*vectest3[0] + normal[1]*vectest3[1] + normal[2]*vectest3[2]) >= 0):
 
                 height = point[1]
-                if hit is None:
+
+                if hit is None or height > hit:
                     hit = height
-                elif height > hit:
-                    hit = height
-        if hit:
-            #print("HIT", point)
-            return hit
-        else:
-            return None
+
+        return hit
