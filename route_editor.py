@@ -296,11 +296,11 @@ class EditorMainWindow(QMainWindow):
             for wp in self.pikminroutes_screen.selected_waypoints:
                 x, y, z, radius = self.pikmin_routes.waypoints[wp]
 
-                height = self.pikminroutes_screen.collision.collide_ray_downwards(x, z, y=y)
+                height = self.pikminroutes_screen.collision.collide_ray_downwards(x, z)
 
                 if height is not None:
                     self.pikmin_routes.waypoints[wp][1] = height
-
+                self.set_wp_lineedit_coordinates(x,height,z,radius)
             self.pikminroutes_screen.update()
 
     def action_button_move_wp(self):
@@ -421,11 +421,13 @@ class EditorMainWindow(QMainWindow):
             y = 100
         else:
             height = self.pikminroutes_screen.collision.collide_ray_downwards(x, z)
+            print("hmm, shot a ray downwards at", x, z)
+            print("we got", height)
             if height is None:
                 y = 100
             else:
                 y = height
-        radius = 100
+        radius = 50
         self.pikmin_routes.add_waypoint(x, y, z, radius)
         self.pikminroutes_screen.update()
         print("created")
@@ -433,7 +435,7 @@ class EditorMainWindow(QMainWindow):
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(930, 850)
+        MainWindow.resize(1200, 850)
         MainWindow.setMinimumSize(QSize(930, 850))
         MainWindow.setWindowTitle("Pikmin Routes Editor")
         #MainWindow.setWindowTitle("Nep-Nep")
