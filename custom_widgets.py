@@ -304,12 +304,12 @@ class BWMapViewer(QWidget):
         pen.setWidth(prevwidth)
         p.setPen(pen)
 
-        for x in range(-6000, 6000+1, 400):
+        for x in range(-6000, 6000+1, 500):
             x = (x-midx)*scalex
             if 0 <= x <= w:
                 p.drawLine(QPoint(x,-5000), QPoint(x,+5000))
 
-        for z in range(-6000, 6000+1, 400):
+        for z in range(-6000, 6000+1, 500):
 
             z = (z-midz)*scalez
             if 0 <= z <= h:
@@ -446,10 +446,18 @@ class BWMapViewer(QWidget):
         p.end()
         end = default_timer()
 
-        print("time taken:", end-start, "sec")
+        #print("time taken:", end-start, "sec")
+        self.last_render = end
+        #if end-start < 1/60.0:
+        #    sleep(1/60.0 - (end-start))
 
-        #if end-start < 1/90.0:
-        #    sleep(1/90.0 - (end-start))
+    """def update(self):
+        current = default_timer()
+
+        if current-self.last_render < 1/90.0:
+            pass
+        else:
+            self.repaint()"""
 
     @catch_exception
     def mousePressEvent(self, event):
@@ -661,12 +669,12 @@ class BWMapViewer(QWidget):
             mapz = mouse_z/scalez + midz
 
             if self.collision is not None:
-                res = self.collision.collide_ray_downwards(mapx, mapz)
+                height = self.collision.collide_ray_downwards(mapx, mapz)
 
-                if res is not None:
+                if height is not None:
                     #self.highlighttriangle = res[1:]
                     #self.update()
-                    self.position_update.emit(event, tuple(round(v, 2) for v in res[0]))
+                    self.position_update.emit(event, (round(mapx, 2), round(height, 2), round(mapz, 2)))
                 else:
                     self.position_update.emit(event, (round(mapx, 2), None, round(mapz,2)))
             else:
@@ -890,8 +898,6 @@ class Collision(object):
         print("finished generating triangles")
         print(grid_size_x, grid_size_z)
 
-        self.collide_ray_downwards(1,2)
-
     def collide_ray_downwards(self, x, z, y=99999):
         grid_x = int((x+6000) // 100)
         grid_z = int((z+6000) // 100)
@@ -905,7 +911,7 @@ class Collision(object):
         dir_y = -1.0
         dir_z = 0
 
-        hit = False
+        hit = None
 
         for i, face in triangles:#face in self.faces:#
             v1index, v2index, v3index = face
@@ -943,10 +949,13 @@ class Collision(object):
                  (normal[0]*vectest2[0] + normal[1]*vectest2[1] + normal[2]*vectest2[2]) >= 0 and
                   (normal[0]*vectest3[0] + normal[1]*vectest3[1] + normal[2]*vectest3[2]) >= 0):
 
-                hit = True
-                break
+                height = point[1]
+                if hit is None:
+                    hit = height
+                elif height > hit:
+                    hit = height
         if hit:
             #print("HIT", point)
-            return point, v1, v2, v3
+            return hit
         else:
             return None

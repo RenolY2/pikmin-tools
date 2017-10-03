@@ -78,6 +78,7 @@ class EditorMainWindow(QMainWindow):
         self.pikminroutes_screen.move_points.connect(self.action_move_waypoints)
         self.pikminroutes_screen.create_waypoint.connect(self.action_create_waypoint)
         self.disable_lineedits()
+        self.last_render = None
         """
         self.level = None
         path = get_default_path()
@@ -295,12 +296,9 @@ class EditorMainWindow(QMainWindow):
             for wp in self.pikminroutes_screen.selected_waypoints:
                 x, y, z, radius = self.pikmin_routes.waypoints[wp]
 
-                result = self.pikminroutes_screen.collision.collide_ray_downwards(x, z, y=y)
+                height = self.pikminroutes_screen.collision.collide_ray_downwards(x, z, y=y)
 
-                if result is not None:
-                    point, v1, v2, v3 = result
-                    height = point[1]
-
+                if height is not None:
                     self.pikmin_routes.waypoints[wp][1] = height
 
             self.pikminroutes_screen.update()
@@ -422,11 +420,11 @@ class EditorMainWindow(QMainWindow):
         if self.pikminroutes_screen.collision is None:
             y = 100
         else:
-            result = self.pikminroutes_screen.collision.collide_ray_downwards(x, z)
-            if result is None:
+            height = self.pikminroutes_screen.collision.collide_ray_downwards(x, z)
+            if height is None:
                 y = 100
             else:
-                u1, y, u2 = result[0]
+                y = height
         radius = 100
         self.pikmin_routes.add_waypoint(x, y, z, radius)
         self.pikminroutes_screen.update()
