@@ -273,7 +273,7 @@ class BWMapViewer(QWidget):
         scalez = (h/viewportheight)#/2.0
 
         if self.level_image is not None:
-            print("drawing things")
+            #print("drawing things")
             startx = (-6000 - midx) * scalex
             startz = (-6000 - midz) * scalez
             endx = (6000 - midx) * scalex
@@ -326,7 +326,7 @@ class BWMapViewer(QWidget):
                 x,y,z,radius = wp_data
                 color = DEFAULT_ENTITY
                 if wp_index in selected:
-                    print("vhanged")
+                    #print("vhanged")
                     color = QColor("red")
 
                 radius = radius*scalex
@@ -687,18 +687,18 @@ class BWMapViewer(QWidget):
             self.last_pos = None
         if self.left_button_down:
             self.left_button_down = False"""
-        print("hm")
+        #print("hm")
         if not event.buttons() & Qt.MiddleButton and self.mid_button_down:
-            print("releasing")
+            #print("releasing")
             self.mid_button_down = False
             self.drag_last_pos = None
         if not event.buttons() & Qt.LeftButton and self.left_button_down:
-            print("releasing left")
+            #print("releasing left")
             self.left_button_down = False
             self.selectionbox_start = self.selectionbox_end = None
             self.update()
         if not event.buttons() & Qt.RightButton and self.right_button_down:
-            print("releasing right")
+            #print("releasing right")
             self.right_button_down = False
             self.update()
         #self.mouse_released.emit(event)
