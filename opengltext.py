@@ -49,6 +49,8 @@ for coltrans in [
         for j in range(repeat):
             COLORS.append(color)
 
+DO_GRAYSCALE = False
+
 class GLPlotWidget(QtWidgets.QOpenGLWidget):
     # default window size
     width, height = 1000, 1000
@@ -71,7 +73,7 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
         # clear the buffer
         #gl.glClear(gl.GL_COLOR_BUFFER_BIT)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) # clear the screen
-
+        glDisable(GL_CULL_FACE)
         # set yellow color for subsequent drawing rendering calls
         verts = self.verts
         faces = self.faces
@@ -104,51 +106,49 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
                 index = len(COLORS)-1
             r, g, b = COLORS[index]
             glColor3f(r/256.0,g/256.0,b/256.0)"""
-            """grayscale = average_y/scaleheight
 
-            if grayscale <= 1/3.0:
-                r = grayscale*3
-                g = b = 0.1
-            elif grayscale <= 2/3.0:
-                g = (grayscale-1/3.0)*3
-                r = 1.0
-                b = 0.1
 
-            elif grayscale <= 1.0:
-                r = g = 1.0
-                b = (grayscale - 2/3.0)*3
+            if DO_GRAYSCALE:
+                average_y = (v1y+v2y+v3y)/3.0 - smallest
+                grayscale = average_y/scaleheight
 
-            glColor3f(r,g,b)"""
+                glColor3f(grayscale, grayscale, grayscale)
+                glVertex3f(v1x, -v1z, v1y)
+                glVertex3f(v2x, -v2z, v2y)
+                glVertex3f(v3x, -v3z, v3y)
 
-            average_y = v1y - smallest
-            index = int((average_y/scaleheight)*len(COLORS))
-            if index < 0:
-                index = 0
-            if index >= len(COLORS):
-                index = len(COLORS)-1
-            r, g, b = COLORS[index]
-            glColor3f(r/256.0,g/256.0,b/256.0)
-            glVertex3f(v1x, -v1z, v1y)
+            else:
+                average_y = v1y - smallest
+                index = int((average_y/scaleheight)*len(COLORS))
+                if index < 0:
+                    index = 0
+                    print("woops")
+                if index >= len(COLORS):
+                    index = len(COLORS)-1
+                    print("woops")
+                r, g, b = COLORS[index]
+                glColor3f(r/256.0,g/256.0,b/256.0)
+                glVertex3f(v1x, -v1z, v1y)
 
-            average_y = v2y - smallest
-            index = int((average_y/scaleheight)*len(COLORS))
-            if index < 0:
-                index = 0
-            if index >= len(COLORS):
-                index = len(COLORS)-1
-            r, g, b = COLORS[index]
-            glColor3f(r/256.0,g/256.0,b/256.0)
-            glVertex3f(v2x, -v2z, v1y)
+                average_y = v2y - smallest
+                index = int((average_y/scaleheight)*len(COLORS))
+                if index < 0:
+                    index = 0
+                if index >= len(COLORS):
+                    index = len(COLORS)-1
+                r, g, b = COLORS[index]
+                glColor3f(r/256.0,g/256.0,b/256.0)
+                glVertex3f(v2x, -v2z, v2y)
 
-            average_y = v3y - smallest
-            index = int((average_y/scaleheight)*len(COLORS))
-            if index < 0:
-                index = 0
-            if index >= len(COLORS):
-                index = len(COLORS)-1
-            r, g, b = COLORS[index]
-            glColor3f(r/256.0,g/256.0,b/256.0)
-            glVertex3f(v3x, -v3z, v1y)
+                average_y = v3y - smallest
+                index = int((average_y/scaleheight)*len(COLORS))
+                if index < 0:
+                    index = 0
+                if index >= len(COLORS):
+                    index = len(COLORS)-1
+                r, g, b = COLORS[index]
+                glColor3f(r/256.0,g/256.0,b/256.0)
+                glVertex3f(v3x, -v3z, v3y)
         glEnd()
         glFinish()
         print("drawn")
