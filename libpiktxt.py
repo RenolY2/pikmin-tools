@@ -160,7 +160,9 @@ class RouteTxt(PikminTxt):
 
     def remove_waypoint(self, index):
         del self.waypoints[index]
-        del self.links[index]
+
+        if index in self.links:
+            del self.links[index]
 
         # Remove all links pointing to the index
         for link, linksto in self.links.items():
