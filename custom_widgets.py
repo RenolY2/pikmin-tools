@@ -448,8 +448,8 @@ class BWMapViewer(QWidget):
 
         print("time taken:", end-start, "sec")
 
-        if end-start < 1/90.0:
-            sleep(1/90.0 - (end-start))
+        #if end-start < 1/90.0:
+        #    sleep(1/90.0 - (end-start))
 
     @catch_exception
     def mousePressEvent(self, event):
@@ -518,6 +518,8 @@ class BWMapViewer(QWidget):
             self.drag_last_pos = (event.x(), event.y())
 
         if event.buttons() & Qt.RightButton:
+            self.right_button_down = True
+
             if self.mousemode == MOUSE_MODE_MOVEWP:
                 mouse_x, mouse_z = (event.x(), event.y())
                 movetox = mouse_x/scalex + midx
@@ -618,14 +620,19 @@ class BWMapViewer(QWidget):
             print("Stuff here")
             if self.pikmin_routes is not None:
                 for wp_index, wp_data in self.pikmin_routes.waypoints.items():
-                    way_x, y, way_z, meta = wp_data
+                    way_x, y, way_z, radius = wp_data
 
 
+                    if (
+                                (selectstartx <= way_x <= selectendx and selectstartz <= way_z <= selectendz) or
+                                (way_x - radius) <= selectstartx and selectendx <= (way_x+radius) and
+                                (way_z - radius) <= selectstartz and selectendz <= (way_z+radius)
+                    ):
 
-                    if selectstartx <= way_x <= selectendx and selectstartz <= way_z <= selectendz:
                         centerx += way_x
                         centerz += way_z
                         selected.append(wp_index)
+
             if len(selected) == 0:
                 self.move_startpos = None
             else:
@@ -636,7 +643,18 @@ class BWMapViewer(QWidget):
             self.selected_waypoints = selected
             self.select_update.emit(event)
             self.update()
+        if self.right_button_down:
+            if self.mousemode == MOUSE_MODE_MOVEWP:
+                mouse_x, mouse_z = (event.x(), event.y())
+                movetox = mouse_x/scalex + midx
+                movetoz = mouse_z/scalez + midz
 
+                if self.move_startpos is not None:
+                    x,z = self.move_startpos
+
+                    self.move_points.emit(movetox-x, movetoz-z)
+
+                    self.move_startpos = (movetox, movetoz)
         if True:#self.highlighttriangle is not None:
             mouse_x, mouse_z = (event.x(), event.y())
             mapx = mouse_x/scalex + midx
@@ -679,13 +697,13 @@ class BWMapViewer(QWidget):
 
     def wheelEvent(self, event):
         wheel_delta = event.angleDelta().y()
-        if wheel_delta > 0:
+        if wheel_delta < 0:
             current = self.zoom_factor
             fac = calc_zoom_in_factor(current)
 
             self.zoom(fac)
 
-        elif wheel_delta < 0:
+        elif wheel_delta > 0:
             current = self.zoom_factor
 
             fac = calc_zoom_out_factor(current)

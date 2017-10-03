@@ -77,6 +77,7 @@ class EditorMainWindow(QMainWindow):
         self.pikminroutes_screen.connect_update.connect(self.action_connect_waypoints)
         self.pikminroutes_screen.move_points.connect(self.action_move_waypoints)
         self.pikminroutes_screen.create_waypoint.connect(self.action_create_waypoint)
+        self.disable_lineedits()
         """
         self.level = None
         path = get_default_path()
@@ -156,7 +157,7 @@ class EditorMainWindow(QMainWindow):
         self.button_add_waypoint.setPushed(False)
         self.button_connect_waypoints.setPushed(False)
         self.button_move_waypoints.setPushed(False)
-
+        self.disable_lineedits()
 
         print("reset done")
 
@@ -243,70 +244,32 @@ class EditorMainWindow(QMainWindow):
 
     @catch_exception
     def event_update_lineedit(self, event):
-        if len(self.pikminroutes_screen.selected_waypoints) == 1:
+        selected_count = len(self.pikminroutes_screen.selected_waypoints)
+        if selected_count == 1:
             for waypoint in self.pikminroutes_screen.selected_waypoints:
                 x, y, z, radius = self.pikmin_routes.waypoints[waypoint]
 
-                self.lineedit_xcoordinate.setText(str(x))
-                self.lineedit_ycoordinate.setText(str(y))
-                self.lineedit_zcoordinate.setText(str(z))
-                self.lineedit_radius.setText(str(radius))
+                self.set_wp_lineedit_coordinates(x, y, z, radius)
+                self.enable_lineedits()
+                self.lineedit_xcoordinate
+        elif selected_count == 0 or selected_count > 1:
+            self.lineedit_xcoordinate.setText("")
+            self.lineedit_ycoordinate.setText("")
+            self.lineedit_zcoordinate.setText("")
+            self.lineedit_radius.setText("")
+            self.disable_lineedits()
 
-    def set_entity_text_multiple(self, entities):
-        self.label_object_id.setText("{0} objects selected".format(len(entities)))
-        MAX = 15
-        listentities = [self.level.obj_map[x].name for x in sorted(entities.keys())][0:MAX]
-        listentities.sort()
-        if len(entities) > MAX:
-            listentities.append("... and {0} more".format(len(entities) - len(listentities)))
-        self.label_position.setText("\n".join(listentities[:5]))
-        self.label_model_name.setText("\n".join(listentities[5:10]))
-        self.label_4.setText("\n".join(listentities[10:]))#15]))
-        self.label_5.setText("")#("\n".join(listentities[12:16]))
 
-    def set_entity_text(self, entityid):
-        try:
-            obj = self.level.obj_map[entityid]
-            if obj.has_attr("mBase"):
-                base = self.level.obj_map[obj.get_attr_value("mBase")]
-                self.label_object_id.setText("{0}\n[{1}]\nBase: {2}\n[{3}]".format(
-                    entityid, obj.type, base.id, base.type))
-            else:
-                self.label_object_id.setText("{0}\n[{1}]".format(entityid, obj.type))
-            self.label_model_name.setText("Model: {0}".format(entity_get_model(self.level, entityid)))
-            x, y, angle = object_get_position(self.level, entityid)
-            self.label_position.setText("x: {0}\ny: {1}".format(x, y))
-            self.lineedit_angle.setText(str(round(angle,2)))
-            self.label_4.setText("Army: {0}".format(entity_get_army(self.level, entityid)))
-            if not obj.has_attr("mPassenger"):
-                self.label_5.setText("Icon Type: \n{0}".format(entity_get_icon_type(self.level, entityid)))
-            else:
-
-                passengers = 0
-                for passenger in obj.get_attr_elements("mPassenger"):
-                    if passenger != "0":
-                        passengers += 1
-                self.label_5.setText("Icon Type: \n{0}\n\nPassengers: {1}".format(
-                    entity_get_icon_type(self.level, entityid), passengers))
-        except:
-            traceback.print_exc()
-
-    def action_lineedit_changeangle(self):
-        if not self.resetting and self.bw_map_screen.current_entity is not None:
-            print("ok")
-            current = self.bw_map_screen.current_entity
-            currx, curry, angle = object_get_position(self.level, current)
-
-            newangle = self.lineedit_angle.text().strip()
-            print(newangle, newangle.isdecimal())
-            try:
-                angle = float(newangle)
-                object_set_position(self.level, current, currx, curry, angle=angle)
-                currentobj = self.level.obj_map[current]
-                update_mapscreen(self.bw_map_screen, currentobj)
-                self.bw_map_screen.update()
-            except:
-                traceback.print_exc()
+    def disable_lineedits(self):
+        self.lineedit_xcoordinate.setDisabled(True)
+        self.lineedit_ycoordinate.setDisabled(True)
+        self.lineedit_zcoordinate.setDisabled(True)
+        self.lineedit_radius.setDisabled(True)
+    def enable_lineedits(self):
+        self.lineedit_xcoordinate.setDisabled(False)
+        self.lineedit_ycoordinate.setDisabled(False)
+        self.lineedit_zcoordinate.setDisabled(False)
+        self.lineedit_radius.setDisabled(False)
 
     def event_update_position(self, event, position):
         x,y,z = position
@@ -323,6 +286,7 @@ class EditorMainWindow(QMainWindow):
             for wp in self.pikminroutes_screen.selected_waypoints:
                 self.pikmin_routes.remove_waypoint(wp)
             self.pikminroutes_screen.selected_waypoints = {}
+
             self.pikminroutes_screen.update()
 
 
@@ -352,7 +316,7 @@ class EditorMainWindow(QMainWindow):
             self.button_move_waypoints.setPushed(True)
             self.button_connect_waypoints.setPushed(False)
             self.pikminroutes_screen.set_mouse_mode(custom_widgets.MOUSE_MODE_MOVEWP)
-            self.button_delete_waypoints.setDisabled(True)
+            self.button_delete_waypoints.setDisabled(False)
 
     def action_button_add_wp(self):
         if self.button_add_waypoint.ispushed:
@@ -439,7 +403,20 @@ class EditorMainWindow(QMainWindow):
             for wp in self.pikminroutes_screen.selected_waypoints:
                 self.pikmin_routes.waypoints[wp][0] += deltax
                 self.pikmin_routes.waypoints[wp][2] += deltaz
+
+            if len(self.pikminroutes_screen.selected_waypoints) == 1:
+                for wp in self.pikminroutes_screen.selected_waypoints:
+                    x,y,z,radius = self.pikmin_routes.waypoints[wp]
+                    self.set_wp_lineedit_coordinates(x, y, z, radius)
+
             self.pikminroutes_screen.update()
+
+    def set_wp_lineedit_coordinates(self, x, y, z, radius):
+        self.lineedit_xcoordinate.setText(str(round(x, 6)))
+        self.lineedit_ycoordinate.setText(str(round(y, 6)))
+        self.lineedit_zcoordinate.setText(str(round(z, 6)))
+        self.lineedit_radius.setText(str(round(radius, 6)))
+
     @catch_exception
     def action_create_waypoint(self, x, z):
         if self.pikminroutes_screen.collision is None:
