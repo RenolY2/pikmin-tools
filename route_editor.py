@@ -44,7 +44,7 @@ from helper_functions import (calc_zoom_in_factor, calc_zoom_out_factor,
 
 from py_obj import read_obj, PikminCollision
 from configuration import read_config, make_default_config, save_cfg
-PIKMIN2PATHS = "Carrying path files (route.txt)"
+PIKMIN2PATHS = "Carrying path files (route.txt;*.txt)"
 #BW_COMPRESSED_LEVEL = "BW compressed level files (*_level.xml.gz)"
 
 class EditorMainWindow(QMainWindow):
@@ -172,7 +172,7 @@ class EditorMainWindow(QMainWindow):
 
     def button_load_level(self):
         try:
-            print("ok", self.default_path)
+            print("ok", self.pathsconfig["routes"])
 
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
@@ -210,18 +210,19 @@ class EditorMainWindow(QMainWindow):
 
     def button_save_level(self):
         try:
-            print("ok", self.default_path)
+            print("ok", self.pathsconfig["routes"])
 
             filepath, choosentype = QFileDialog.getSaveFileName(
                 self, "Save File",
-                self.default_path,
+                self.pathsconfig["routes"],
                 PIKMIN2PATHS+";;All files (*)")
 
             print("doooone")
             if filepath:
                 with open(filepath, "w") as f:
                     self.pikmin_routes.write(f)
-                self.default_path = filepath
+                self.pathsconfig["routes"] = filepath
+                save_cfg(self.configuration)
         except Exception as err:
             traceback.print_exc()
 

@@ -206,12 +206,24 @@ class RouteTxt(PikminTxt):
         self._root = TextRoot()
         self._root.append([len(self.waypoints), "# waypoint count"])
 
-        for i, waypoint_pos in self.waypoints.items():
+        # This is for cleaning up gaps in the indices
+        indices = sorted(self.waypoints.keys())
+        map_indices_to_gapless_indices = {}
+        for i, j in enumerate(indices):
+            map_indices_to_gapless_indices[j] = i
+
+
+        #for i, waypoint_pos in self.waypoints.items():
+        for i in indices:
+            waypoint_pos = self.waypoints[i]
+            fixed_i = map_indices_to_gapless_indices[i]
+
             waypoint_node = TextNode()
-            waypoint_node.append([i, "# index"])  # waypoint index
+            waypoint_node.append([fixed_i, "# index"])  # waypoint index
             if i in self.links:
                 waypoint_node.append([len(self.links[i]), "# numLinks"])
                 for j, link in enumerate(self.links[i]):
+                    link = map_indices_to_gapless_indices[link]
                     waypoint_node.append([link, "# link {}".format(j)])
             else:
                 waypoint_node.append(0)
