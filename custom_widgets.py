@@ -148,6 +148,7 @@ class BWMapViewer(QWidget):
 
         self.move_startpos = []
         self.overlapping_wp_index = 0
+        self.editorconfig = None
 
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
@@ -663,7 +664,6 @@ class BWMapViewer(QWidget):
             else:
                 count = float(len(selected))
                 self.move_startpos = selected
-                print(self.move_startpos, "wuw")
 
             self.selected_waypoints = selected
             self.select_update.emit(event)
@@ -730,6 +730,12 @@ class BWMapViewer(QWidget):
 
     def wheelEvent(self, event):
         wheel_delta = event.angleDelta().y()
+
+        if self.editorconfig is not None:
+            invert = self.editorconfig.getboolean("invertzoom")
+            if invert:
+                wheel_delta = -1*wheel_delta
+
         if wheel_delta < 0:
             current = self.zoom_factor
             fac = calc_zoom_in_factor(current)

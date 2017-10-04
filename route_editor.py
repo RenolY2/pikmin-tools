@@ -43,7 +43,7 @@ from helper_functions import (calc_zoom_in_factor, calc_zoom_out_factor,
                                   parse_terrain_to_image, get_water_height)
 
 from py_obj import read_obj, PikminCollision
-
+from configuration import read_config, make_default_config, save_cfg
 PIKMIN2PATHS = "Carrying path files (route.txt)"
 #BW_COMPRESSED_LEVEL = "BW compressed level files (*_level.xml.gz)"
 
@@ -53,12 +53,7 @@ class EditorMainWindow(QMainWindow):
 
         self.setupUi(self)
         self.retranslateUi(self)
-        path = get_default_path()
-        if path is None:
-            self.default_path = ""
-        else:
-            self.default_path = path
-        self.default_collision_path = ""
+
         self.pikmin_routes = RouteTxt()
         self.pikminroutes_screen.pikmin_routes = self.pikmin_routes
         self.collision = None
@@ -79,6 +74,19 @@ class EditorMainWindow(QMainWindow):
         self.pikminroutes_screen.create_waypoint.connect(self.action_create_waypoint)
         self.disable_lineedits()
         self.last_render = None
+
+        try:
+            self.configuration = read_config()
+            print("config loaded")
+        except FileNotFoundError as e:
+            print(e)
+            print("creating file...")
+            self.configuration = make_default_config()
+        #self.ground_wp_when_moving = self.configuration["ROUTES EDITOR"].getboolean("groundwaypointswhenmoving")
+
+        self.pathsconfig = self.configuration["default paths"]
+        self.editorconfig = self.configuration["routes editor"]
+        self.pikminroutes_screen.editorconfig = self.editorconfig
         """
         self.level = None
         path = get_default_path()
@@ -168,7 +176,7 @@ class EditorMainWindow(QMainWindow):
 
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
-                self.default_path,
+                self.pathsconfig["routes"],
                 PIKMIN2PATHS+";;All files (*)")
             print("doooone")
             if filepath:
@@ -181,8 +189,6 @@ class EditorMainWindow(QMainWindow):
                     try:
                         self.pikmin_routes = RouteTxt()
                         self.pikmin_routes.from_file(f)
-                        self.default_path = filepath
-                        set_default_path(filepath)
 
                         self.pikminroutes_screen.pikmin_routes = self.pikmin_routes
                         self.pikminroutes_screen.update()
@@ -191,7 +197,8 @@ class EditorMainWindow(QMainWindow):
                         #self.bw_map_screen.update()
                         path_parts = path.split(filepath)
                         self.setWindowTitle("Routes Editor - {0}".format(filepath))
-
+                        self.pathsconfig["routes"] = filepath
+                        save_cfg(self.configuration)
                     except Exception as error:
                         print("error", error)
                         traceback.print_exc()
@@ -223,7 +230,7 @@ class EditorMainWindow(QMainWindow):
         try:
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
-                self.default_collision_path,
+                self.pathsconfig["collision"],
                 "Collision (*.obj);;All files (*)")
             with open(filepath, "r") as f:
                 verts, faces, normals = read_obj(f)
@@ -238,7 +245,8 @@ class EditorMainWindow(QMainWindow):
             tmprenderwindow.destroy()
 
             self.pikminroutes_screen.set_collision(verts, faces)
-
+            self.pathsconfig["routes"] = filepath
+            save_cfg(self.configuration)
 
         except:
             traceback.print_exc()
@@ -247,7 +255,7 @@ class EditorMainWindow(QMainWindow):
         try:
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
-                self.default_collision_path,
+                self.pathsconfig["collision"],
                 "Grid.bin (*.bin);;All files (*)")
             with open(filepath, "rb") as f:
                 collision = PikminCollision(f)
@@ -264,7 +272,8 @@ class EditorMainWindow(QMainWindow):
             tmprenderwindow.destroy()
 
             self.pikminroutes_screen.set_collision(verts, faces)
-
+            self.pathsconfig["routes"] = filepath
+            save_cfg(self.configuration)
 
         except:
             traceback.print_exc()
@@ -278,7 +287,7 @@ class EditorMainWindow(QMainWindow):
 
                 self.set_wp_lineedit_coordinates(x, y, z, radius)
                 self.enable_lineedits()
-                self.lineedit_xcoordinate
+                #self.lineedit_xcoordinate
         elif selected_count == 0 or selected_count > 1:
             self.lineedit_xcoordinate.setText("")
             self.lineedit_ycoordinate.setText("")
@@ -429,8 +438,14 @@ class EditorMainWindow(QMainWindow):
                 self.pikmin_routes.waypoints[wp][2] += deltaz
 
             if len(self.pikminroutes_screen.selected_waypoints) == 1:
+                do_ground = self.editorconfig.getboolean("GroundWaypointsWhenMoving")
                 for wp in self.pikminroutes_screen.selected_waypoints:
                     x,y,z,radius = self.pikmin_routes.waypoints[wp]
+                    if do_ground is True:
+                        height = self.pikminroutes_screen.collision.collide_ray_downwards(x, z)
+                        if height is not None:
+                            y = height
+                            self.pikmin_routes.waypoints[wp][1] = y
                     self.set_wp_lineedit_coordinates(x, y, z, radius)
 
             self.pikminroutes_screen.update()
@@ -453,7 +468,7 @@ class EditorMainWindow(QMainWindow):
                 y = 100
             else:
                 y = height
-        radius = 50
+        radius = float(self.editorconfig["defaultradius"])
         self.pikmin_routes.add_waypoint(x, y, z, radius)
         self.pikminroutes_screen.update()
         print("created")
