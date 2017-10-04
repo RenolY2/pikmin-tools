@@ -42,7 +42,7 @@ from helper_functions import (calc_zoom_in_factor, calc_zoom_out_factor,
                                   object_set_position, object_get_position, get_position_attribute, get_type,
                                   parse_terrain_to_image, get_water_height)
 
-from py_obj import read_obj
+from py_obj import read_obj, PikminCollision
 
 PIKMIN2PATHS = "Carrying path files (route.txt)"
 #BW_COMPRESSED_LEVEL = "BW compressed level files (*_level.xml.gz)"
@@ -227,6 +227,32 @@ class EditorMainWindow(QMainWindow):
                 "Collision (*.obj);;All files (*)")
             with open(filepath, "r") as f:
                 verts, faces, normals = read_obj(f)
+
+            tmprenderwindow = TempRenderWindow(verts, faces)
+            tmprenderwindow.show()
+
+            framebuffer = tmprenderwindow.widget.grabFramebuffer()
+            framebuffer.save("tmp_image.png", "PNG")
+            self.pikminroutes_screen.level_image = framebuffer
+
+            tmprenderwindow.destroy()
+
+            self.pikminroutes_screen.set_collision(verts, faces)
+
+
+        except:
+            traceback.print_exc()
+
+    def button_load_collision_grid(self):
+        try:
+            filepath, choosentype = QFileDialog.getOpenFileName(
+                self, "Open File",
+                self.default_collision_path,
+                "Grid.bin (*.bin);;All files (*)")
+            with open(filepath, "rb") as f:
+                collision = PikminCollision(f)
+            verts = collision.vertices
+            faces = [face[0] for face in collision.faces]
 
             tmprenderwindow = TempRenderWindow(verts, faces)
             tmprenderwindow.show()
@@ -529,6 +555,9 @@ class EditorMainWindow(QMainWindow):
         self.collision_load_action = QAction("Load .OBJ", self)
         self.collision_load_action.triggered.connect(self.button_load_collision)
         self.collision_menu.addAction(self.collision_load_action)
+        self.collision_load_grid_action = QAction("Load GRID.BIN", self)
+        self.collision_load_grid_action.triggered.connect(self.button_load_collision_grid)
+        self.collision_menu.addAction(self.collision_load_grid_action)
 
         # ----- Set up menu bar and add the file menus
         MainWindow.setMenuBar(self.menubar)
