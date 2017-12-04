@@ -1,11 +1,8 @@
 # Library for parsing some Pikmin 2 Text files (often have the ending .txt)
 
+from pikmingen import PikminObject, TextRoot, TextNode
 
-class TextRoot(list):
-    pass
 
-class TextNode(list):
-    pass
 
 
 def parse_structure(f, depth=0):
@@ -249,20 +246,54 @@ class RouteTxt(PikminTxt):
 class PikminGenFile(PikminTxt):
     def __init__(self):
         super().__init__()
-        self.version = 0.1
+        self.version = "{v0.1}"
         self.startpos_x, self.startpos_y, self.startpos_z = 0.0, 0.0, 0.0
         self.startdir = 0.0
 
         self.objects = []
 
+    def from_file(self, f):
+        super().from_file(f)
 
+        self.version = self._root[0]
+
+        self.startpos_x, self.startpos_y, self.startpos_z = map(float, self._root[1])
+        self.startdir = float(self._root[2])
+        generator_count = int(self._root[3])
+
+        del self.objects
+        self.objects = []
+
+        assert generator_count == len(self._root) - 4
+
+        if generator_count > 0:
+            for generator in self._root[4:]:
+                pikminobject = PikminObject()
+                pikminobject.from_textnode(generator)
+                self.objects.append(pikminobject)
+
+    def write(self, f, *args, **kwargs):
+        del self._root
+        self._root = TextRoot()
+
+        self._root.append(self.version)
+        self._root.append([self.startpos_x, self.startpos_y, self.startpos_z])
+        self._root.append(self.startdir)
+        self._root.append(len(self.objects)) # amount of generators, aka objects
+
+        for pikminobject in self.objects:
+            node = pikminobject.to_textnode()
+            self._root.append(node)
+
+        print(len(self._root))
+        super().write(f, *args, **kwargs)
 
 
 if __name__ == "__main__":
     import os
     import pprint
 
-    pikmintext = PikminTxt()
+    pikmintext = PikminGenFile()
 
     input_path = os.path.join("examples", "initgen.txt")
     output_path = input_path+"new.txt"
@@ -271,7 +302,7 @@ if __name__ == "__main__":
         print("parsing", input_path)
         pikmintext.from_file(f)
 
-
+    print(pikmintext.version)
     with open(output_path, "w", encoding="shift-jis") as f:
         print("writing", input_path)
         pikmintext.write(f)
