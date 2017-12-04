@@ -26,10 +26,23 @@ def parse_structure(f, depth=0):
             break
         elif line != "":
             values = line.split(" ")
+
+            # This is a hack for an oddity in pikmin 2 initgen files where there's
+            # a closing bracket on the same line as a line of data.
+            break_on_same_line = False
+
+            if values[-1].strip() == "}" and "{" not in line:
+
+                break_on_same_line = True
+                values.pop()
+
             if len(values) == 1:
                 data.append(values[0])
             else:
                 data.append(values)
+
+            if break_on_same_line:
+                break
 
     return data
 
@@ -233,30 +246,32 @@ class RouteTxt(PikminTxt):
 
         super().write(f, *args, **kwargs)
 
+class PikminGenFile(PikminTxt):
+    def __init__(self):
+        super().__init__()
+        self.version = 0.1
+        self.startpos_x, self.startpos_y, self.startpos_z = 0.0, 0.0, 0.0
+        self.startdir = 0.0
+
+        self.objects = []
+
+
+
 
 if __name__ == "__main__":
     import os
     import pprint
 
-    pikmintext = RouteTxt()
+    pikmintext = PikminTxt()
 
-    input_path = os.path.join("examples", "route.txt")
-    output_pat = input_path+"new.txt"
+    input_path = os.path.join("examples", "initgen.txt")
+    output_path = input_path+"new.txt"
 
     with open(input_path, "r", encoding="shift-jis") as f:
         print("parsing", input_path)
         pikmintext.from_file(f)
 
-    print(pikmintext.waypoints)
 
-    wp = pikmintext.add_waypoint(10, 20, 30, 1337)
-    for i in range(15):
-        pikmintext.add_link(wp, wp-i)
-        pikmintext.add_link(wp-i, wp)
-    with open(output_pat, "w") as f:
+    with open(output_path, "w", encoding="shift-jis") as f:
+        print("writing", input_path)
         pikmintext.write(f)
-    pikmintext.remove_waypoint(wp)
-    with open(output_pat+"2.txt", "w") as f:
-        pikmintext.write(f)
-
-
