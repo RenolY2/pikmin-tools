@@ -62,7 +62,7 @@ def transform_coords(x,z, startx, startz, scalex, scalez):
 
     return relativex*scalex, relativez*scalez
 
-class BWMapViewer(QWidget):
+class MapViewer(QWidget):
     mouse_clicked = pyqtSignal(QMouseEvent)
     entity_clicked = pyqtSignal(QMouseEvent, str)
     mouse_dragged = pyqtSignal(QMouseEvent)
