@@ -13,7 +13,8 @@ def make_default_config():
 
     cfg["default paths"] = {
         "routes": "",
-        "collision": ""
+        "collision": "",
+        "gen": ""
     }
 
     cfg["routes editor"] = {
