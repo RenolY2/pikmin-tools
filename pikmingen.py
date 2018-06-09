@@ -14,7 +14,9 @@ class PikminObject(object):
 
         self.position_x = self.position_y = self.position_z = 0.0
         self.offset_x = self.offset_y = self.offset_z = 0.0
+        self.x = self.y = self.z = 0.0
 
+        self.object_type = None
         self.identifier = None
         self.identifier_misc = None
         self._object_data = TextNode()
@@ -26,6 +28,10 @@ class PikminObject(object):
         self.arguments = [int(x) for x in textnode[3]] # object data that differs per object type
         self.position_x, self.position_y, self.position_z = map(float, textnode[4]) # XYZ Position
         self.offset_x, self.offset_y, self.offset_z = map(float, textnode[5]) # XYZ offset
+
+        self.x = self.position_x + self.offset_x
+        self.y = self.position_y + self.offset_y
+        self.z = self.position_z + self.offset_z
 
         # Sometimes the identifier information has 2 or 3 arguments so we handle it like this
         self.object_type = textnode[6][0] # Commonly a 4 character string
