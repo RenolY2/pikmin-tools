@@ -1,5 +1,6 @@
 import configparser
 
+
 def read_config():
     print("reading")
     cfg = configparser.ConfigParser()
@@ -7,6 +8,7 @@ def read_config():
         cfg.read_file(f)
     print("read")
     return cfg
+
 
 def make_default_config():
     cfg = configparser.ConfigParser()
@@ -27,6 +29,7 @@ def make_default_config():
         cfg.write(f)
 
     return cfg
+
 
 def save_cfg(cfg):
     with open("piktool.ini", "w") as f:

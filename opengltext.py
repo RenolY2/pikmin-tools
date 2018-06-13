@@ -59,6 +59,10 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
         #Load 2D data as a Nx2 Numpy array.
         self.verts = verts
         self.faces = faces
+        self.colors = None
+
+    def set_color_data(self, facecolors):
+        self.colors = facecolors
 
     def initializeGL(self):
         #Initialize OpenGL, VBOs, upload data on the GPU, etc.
@@ -92,7 +96,10 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
         print(len(COLORS))
 
         glBegin(GL_TRIANGLES)
+
+        i = -1
         for v1, v2, v3 in faces:
+            i += 1
             v1x, v1y, v1z = verts[v1[0]-1]
             v2x, v2y, v2z = verts[v2[0]-1]
             v3x, v3y, v3z = verts[v3[0]-1]
@@ -107,8 +114,13 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
             r, g, b = COLORS[index]
             glColor3f(r/256.0,g/256.0,b/256.0)"""
 
+            if self.colors is not None:
+                glColor3f(*self.colors[i])
+                glVertex3f(v1x, -v1z, v1y)
+                glVertex3f(v2x, -v2z, v2y)
+                glVertex3f(v3x, -v3z, v3y)
 
-            if DO_GRAYSCALE:
+            elif DO_GRAYSCALE:
                 average_y = (v1y+v2y+v3y)/3.0 - smallest
                 grayscale = average_y/scaleheight
 
@@ -153,9 +165,8 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
         glFinish()
         print("drawn")
 
-
     def resizeGL(self, width, height):
-        #Called upon window resizing: reinitialize the viewport.
+        # Called upon window resizing: reinitialize the viewport.
         # update the window size
         self.width, self.height = width, height
         # paint within the whole window
@@ -167,12 +178,14 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
 
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
+
+
 # define a Qt window with an OpenGL widget inside it
 class TempRenderWindow(QtWidgets.QMainWindow):
     def __init__(self, verts, faces):
         super(TempRenderWindow, self).__init__()
         # generate random data points
-        #self.data = np.array(.2*rdn.randn(100000,2),dtype=np.float32)
+        # self.data = np.array(.2*rdn.randn(100000,2),dtype=np.float32)
         # initialize the GL widget
         self.widget = GLPlotWidget()
         self.widget.set_data(verts, faces)
@@ -180,6 +193,7 @@ class TempRenderWindow(QtWidgets.QMainWindow):
         self.setGeometry(100, 100, self.widget.width, self.widget.height)
         self.setCentralWidget(self.widget)
         #self.update()
+
 
 if __name__ == '__main__':
     # import numpy for generating random data points

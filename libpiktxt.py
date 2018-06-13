@@ -1,5 +1,6 @@
 # Library for parsing some Pikmin 2 Text files (often have the ending .txt)
 
+from io import StringIO
 from pikmingen import PikminObject, TextRoot, TextNode
 
 
@@ -49,6 +50,10 @@ class PikminTxt(object):
 
     def from_file(self, f):
         self._root = TextRoot(parse_structure(f, depth=0))
+
+    def from_text(self, text):
+        f = StringIO(text)
+        self.from_file(f)
 
     def write(self, f, node=None, depth=0, indent_char="\t"):
         if node is None:

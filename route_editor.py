@@ -5,8 +5,9 @@
 # Created by: PyQt5 UI code generator 5.5.1
 #
 # WARNING! All changes made in this file will be lost!
-from libpiktxt import RouteTxt
+
 import traceback
+
 import itertools
 import gzip
 from copy import copy, deepcopy
@@ -23,29 +24,19 @@ from PyQt5.QtGui import QMouseEvent, QImage
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 
+from libpiktxt import RouteTxt
+from lib.rarc import Archive
 
-"""
-from res_tools.bw_archive_base import BWArchiveBase
-
-from lib.bw_read_xml import BattWarsLevel, BattWarsObject"""
 import custom_widgets
-from custom_widgets import (MenuDontClose, BWMapViewer,
-                            catch_exception, CheckableButton,
-                            SHOW_TERRAIN_LIGHT, SHOW_TERRAIN_NO_TERRAIN, SHOW_TERRAIN_REGULAR)
+from custom_widgets import (MapViewer,
+                            catch_exception, CheckableButton)
 
 from opengltext import TempRenderWindow
 
-from helper_functions import (calc_zoom_in_factor, calc_zoom_out_factor,
-                                  get_default_path, set_default_path, update_mapscreen,
-                                  bw_coords_to_image_coords, image_coords_to_bw_coords,
-                                  entity_get_army, entity_get_icon_type, entity_get_model,
-                                  object_set_position, object_get_position, get_position_attribute, get_type,
-                                  parse_terrain_to_image, get_water_height)
-
 from py_obj import read_obj, PikminCollision
 from configuration import read_config, make_default_config, save_cfg
+
 PIKMIN2PATHS = "Carrying path files (route.txt;*.txt)"
-#BW_COMPRESSED_LEVEL = "BW compressed level files (*_level.xml.gz)"
 
 class EditorMainWindow(QMainWindow):
     def __init__(self):
@@ -226,7 +217,6 @@ class EditorMainWindow(QMainWindow):
         except Exception as err:
             traceback.print_exc()
 
-
     def button_load_collision(self):
         try:
             filepath, choosentype = QFileDialog.getOpenFileName(
@@ -257,9 +247,22 @@ class EditorMainWindow(QMainWindow):
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
                 self.pathsconfig["collision"],
-                "Grid.bin (*.bin);;All files (*)")
+                "Grid.bin (*.bin);;Archived grid.bin (texts.arc, texts.szs);;All files (*)")
+            print(choosentype)
+
+            if choosentype == "Archived grid.bin (texts.arc, texts.szs)" or filepath.endswith(".szs") or filepath.endswith(".arc"):
+                load_from_arc = True
+            else:
+                load_from_arc = False
+
+
             with open(filepath, "rb") as f:
+                if load_from_arc:
+                    archive = Archive.from_file(f)
+                    f = archive["text/grid.bin"]
                 collision = PikminCollision(f)
+
+
             verts = collision.vertices
             faces = [face[0] for face in collision.faces]
 
@@ -494,7 +497,7 @@ class EditorMainWindow(QMainWindow):
         #self.scrollArea = QScrollArea(self.centralwidget)
         #self.scrollArea.setWidgetResizable(True)
 
-        self.pikminroutes_screen = BWMapViewer(self.centralwidget)
+        self.pikminroutes_screen = MapViewer(self.centralwidget)
         self.pikminroutes_screen.position_update.connect(self.event_update_position)
         self.pikminroutes_screen.select_update.connect(self.event_update_lineedit)
         #self.scrollArea.setWidget(self.bw_map_screen)
