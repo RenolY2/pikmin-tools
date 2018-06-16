@@ -75,6 +75,11 @@ class PikminObject(object):
 
         self._object_data = other_pikminobj._object_data
 
+    def copy(self):
+        newobj = PikminObject()
+        newobj.from_pikmin_object(self)
+        return newobj
+
     def get_rotation(self):
         if self.object_type == "{item}":
             itemdata = self._object_data[0]

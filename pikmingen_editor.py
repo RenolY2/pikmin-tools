@@ -4,10 +4,13 @@ import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 
 from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication, QPoint
+from PyQt5.QtCore import Qt
+
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
                              QSpacerItem, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QHBoxLayout,
                              QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar, QLineEdit)
 from PyQt5.QtGui import QMouseEvent, QImage
+import PyQt5.QtGui as QtGui
 
 import opengltext
 import py_obj
@@ -25,7 +28,8 @@ PIKMIN2GEN = "Generator files (defaultgen.txt;initgen.txt;plantsgen.txt;*.txt)"
 class GenEditor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.pikmin_gen_file = None
+        self.pikmin_gen_file = PikminGenFile()
+
         self.setup_ui()
 
         try:
@@ -37,6 +41,8 @@ class GenEditor(QMainWindow):
             self.configuration = make_default_config()
         #self.ground_wp_when_moving = self.configuration["ROUTES EDITOR"].getboolean("groundwaypointswhenmoving")
 
+        self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
+
         self.pathsconfig = self.configuration["default paths"]
         self.editorconfig = self.configuration["routes editor"]
         #self.pikminroutes_screen.editorconfig = self.editorconfig
@@ -44,6 +50,9 @@ class GenEditor(QMainWindow):
         self.current_coordinates = None
         self.editing_windows = {}
         self.add_object_window = None
+        self.object_to_be_added = None
+
+        self.history = EditorHistory()
 
     def reset(self):
         pass
@@ -123,7 +132,7 @@ class GenEditor(QMainWindow):
         self.collision_load_action.triggered.connect(self.button_load_collision)
         self.collision_menu.addAction(self.collision_load_action)
         self.collision_load_grid_action = QAction("Load GRID.BIN", self)
-        #self.collision_load_grid_action.triggered.connect(self.button_load_collision_grid)
+        self.collision_load_grid_action.triggered.connect(self.button_load_collision_grid)
         self.collision_menu.addAction(self.collision_load_grid_action)
         self.collision_menu.setTitle("Geometry")
 
@@ -160,6 +169,20 @@ class GenEditor(QMainWindow):
         self.pik_control.button_edit_object.pressed.connect(self.action_open_editwindow)
 
         self.pik_control.button_add_object.pressed.connect(self.button_open_add_item_window)
+        self.pik_control.button_move_object.pressed.connect(self.button_move_objects)
+        self.pikmin_gen_view.move_points.connect(self.action_move_objects)
+        self.pikmin_gen_view.create_waypoint.connect(self.action_add_object)
+        self.pik_control.button_ground_object.pressed.connect(self.action_ground_objects)
+        self.pik_control.button_remove_object.pressed.connect(self.action_delete_objects)
+
+        delete_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(Qt.Key_Delete), self)
+        delete_shortcut.activated.connect(self.action_delete_objects)
+
+        undo_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(Qt.CTRL + Qt.Key_Z), self)
+        undo_shortcut.activated.connect(self.action_undo)
+
+        redo_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(Qt.CTRL + Qt.Key_Y), self)
+        redo_shortcut.activated.connect(self.action_redo)
 
     def button_load_collision(self):
         try:
@@ -193,7 +216,139 @@ class GenEditor(QMainWindow):
     def button_open_add_item_window(self):
         if self.add_object_window is None:
             self.add_object_window = pikwidgets.AddPikObjectWindow()
+            self.add_object_window.button_savetext.pressed.connect(self.button_add_item_window_save)
+            self.add_object_window.closing.connect(self.button_add_item_window_close)
             self.add_object_window.show()
+        elif self.pikmin_gen_view.mousemode == pikwidgets.MOUSE_MODE_ADDWP:
+            self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
+            self.pik_control.button_add_object.setChecked(False)
+
+    @catch_exception
+    def button_add_item_window_save(self):
+        if self.add_object_window is not None:
+            self.object_to_be_added = self.add_object_window.get_content()
+
+            if self.object_to_be_added is not None:
+                self.pik_control.button_add_object.setChecked(True)
+                self.pik_control.button_move_object.setChecked(False)
+                self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_ADDWP)
+                self.add_object_window.destroy()
+                self.add_object_window = None
+                self.pikmin_gen_view.setContextMenuPolicy(Qt.DefaultContextMenu)
+
+    @catch_exception
+    def button_add_item_window_close(self):
+        # self.add_object_window.destroy()
+        self.add_object_window = None
+        self.pik_control.button_add_object.setChecked(False)
+        print("okdone")
+
+    @catch_exception
+    def action_add_object(self, x, z):
+        newobj = self.object_to_be_added.copy()
+
+        newobj.position_x = newobj.x = x
+        newobj.position_z = newobj.z = z
+        newobj.offset_x = newobj.offset_z = 0.0
+
+        self.pikmin_gen_file.objects.append(newobj)
+        self.pikmin_gen_view.update()
+
+        self.history.add_history_addobject(newobj)
+
+    def button_move_objects(self):
+        if self.pikmin_gen_view.mousemode == pikwidgets.MOUSE_MODE_MOVEWP:
+            self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
+        else:
+            self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_MOVEWP)
+
+    @catch_exception
+    def action_move_objects(self, deltax, deltaz):
+        for obj in self.pikmin_gen_view.selected:
+            obj.x += deltax
+            obj.z += deltaz
+            obj.position_x = obj.x
+            obj.position_z = obj.z
+            obj.offset_x = 0
+            obj.offset_z = 0
+
+        if len(self.pikmin_gen_view.selected) == 1:
+            obj = self.pikmin_gen_view.selected[0]
+            self.pik_control.set_info(obj.object_type, (obj.x, obj.y, obj.z), obj.get_rotation())
+
+        self.pikmin_gen_view.update()
+
+    def action_ground_objects(self):
+        for obj in self.pikmin_gen_view.selected:
+            if self.pikmin_gen_view.collision is None:
+                return None
+            height = self.pikmin_gen_view.collision.collide_ray_downwards(obj.x, obj.z)
+
+            if height is not None:
+                obj.position_y = obj.y = height
+                obj.offset_y = 0.0
+
+        if len(self.pikmin_gen_view.selected) == 1:
+            obj = self.pikmin_gen_view.selected[0]
+            self.pik_control.set_info(obj.object_type, (obj.x, obj.y, obj.z), obj.get_rotation())
+
+    def action_delete_objects(self):
+        tobedeleted = []
+        for obj in self.pikmin_gen_view.selected:
+            self.pikmin_gen_file.objects.remove(obj)
+            tobedeleted.append(obj)
+        self.pikmin_gen_view.selected = []
+
+        self.pik_control.reset_info()
+        self.pikmin_gen_view.update()
+        self.history.add_history_removeobjects(tobedeleted)
+
+    @catch_exception
+    def action_undo(self):
+        res = self.history.history_undo()
+        if res is None:
+            return
+        action, val = res
+
+        if action == "AddObject":
+            obj = val
+            self.pikmin_gen_file.objects.remove(val)
+            if len(self.pikmin_gen_view.selected) == 1 and self.pikmin_gen_view.selected[0] is obj:
+                self.pik_control.reset_info()
+            if val in self.pikmin_gen_view.selected:
+                self.pikmin_gen_view.selected.remove(val)
+
+            self.pikmin_gen_view.update()
+
+        if action == "RemoveObjects":
+            for obj in val:
+                self.pikmin_gen_file.objects.append(obj)
+
+            self.pikmin_gen_view.update()
+
+    @catch_exception
+    def action_redo(self):
+        res = self.history.history_redo()
+        if res is None:
+            return
+
+        action, val = res
+
+        if action == "AddObject":
+            obj = val
+            self.pikmin_gen_file.objects.append(obj)
+
+            self.pikmin_gen_view.update()
+
+        if action == "RemoveObjects":
+            for obj in val:
+                self.pikmin_gen_file.objects.remove(val)
+                if len(self.pikmin_gen_view.selected) == 1 and self.pikmin_gen_view.selected[0] is obj:
+                    self.pik_control.reset_info()
+                if val in self.pikmin_gen_view.selected:
+                    self.pikmin_gen_view.selected.remove(val)
+
+            self.pikmin_gen_view.update()
 
     def button_load_collision_grid(self):
         try:
@@ -201,20 +356,19 @@ class GenEditor(QMainWindow):
                 self, "Open File",
                 self.pathsconfig["collision"],
                 "Grid.bin (*.bin);;Archived grid.bin (texts.arc, texts.szs);;All files (*)")
-            print(choosentype)
 
-            if choosentype == "Archived grid.bin (texts.arc, texts.szs)" or filepath.endswith(".szs") or filepath.endswith(".arc"):
+            if (choosentype == "Archived grid.bin (texts.arc, texts.szs)"
+                    or filepath.endswith(".szs")
+                    or filepath.endswith(".arc")):
                 load_from_arc = True
             else:
                 load_from_arc = False
-
 
             with open(filepath, "rb") as f:
                 if load_from_arc:
                     archive = Archive.from_file(f)
                     f = archive["text/grid.bin"]
                 collision = py_obj.PikminCollision(f)
-
 
             verts = collision.vertices
             faces = [face[0] for face in collision.faces]
@@ -224,12 +378,12 @@ class GenEditor(QMainWindow):
 
             framebuffer = tmprenderwindow.widget.grabFramebuffer()
             framebuffer.save("tmp_image.png", "PNG")
-            self.pikminroutes_screen.level_image = framebuffer
+            self.pikmin_gen_view.level_image = framebuffer
 
             tmprenderwindow.destroy()
 
-            self.pikminroutes_screen.set_collision(verts, faces)
-            self.pathsconfig["routes"] = filepath
+            self.pikmin_gen_view.set_collision(verts, faces)
+            self.pathsconfig["collision"] = filepath
             save_cfg(self.configuration)
 
         except:
@@ -245,7 +399,6 @@ class GenEditor(QMainWindow):
             except Exception as e:
                 print(e)
             else:
-                print("hi")
                 if len(self.pikmin_gen_view.selected) == 1:
                     pikobject = self.pikmin_gen_view.selected[0]
 
@@ -271,8 +424,10 @@ class GenEditor(QMainWindow):
     def action_open_editwindow(self):
         if self.pikmin_gen_file is not None:
             selected = self.pikmin_gen_view.selected
+
             if len(self.pikmin_gen_view.selected) == 1:
                 currentobj = selected[0]
+
                 if currentobj not in self.editing_windows:
                     self.editing_windows[currentobj] = PikObjectEditor(
                         windowtype="Object {0}".format(currentobj.object_type)
@@ -292,9 +447,6 @@ class GenEditor(QMainWindow):
                     self.editing_windows[currentobj].button_savetext.pressed.connect(action_editwindow_save_data)
 
                     self.editing_windows[currentobj].show()
-
-
-
 
     @catch_exception
     def action_update_info(self, event):
@@ -324,7 +476,6 @@ class GenEditor(QMainWindow):
         context_menu.destroy()
 
     def action_copy_coords_to_clipboard(self):
-        pass
         print("foobar", self.current_coordinates)
 
         QApplication.clipboard().setText(", ".join(str(x) for x in self.current_coordinates))
@@ -332,6 +483,52 @@ class GenEditor(QMainWindow):
     def action_update_position(self, event, pos):
         self.current_coordinates = pos
         self.statusbar.showMessage(str(pos))
+
+
+class EditorHistory(object):
+    def __init__(self):
+        self.history = []
+        self.step = 0
+
+    def _add_history(self, entry):
+        if self.step == len(self.history):
+            self.history.append(entry)
+            self.step += 1
+        else:
+            for i in range(len(self.history) - self.step):
+                self.history.pop()
+            self.history.append(entry)
+            self.step += 1
+            assert len(self.history) == self.step
+
+        if len(self.history) > 10:
+            for i in range(len(self.history) - 10):
+                self.history.pop(0)
+                self.step -= 1
+
+    def add_history_addobject(self, pikobject):
+        self._add_history(("AddObject", pikobject))
+
+    def add_history_removeobjects(self, objects):
+        self._add_history(("RemoveObjects", objects))
+
+    def history_undo(self):
+        if self.step == 0:
+            return None
+
+        self.step -= 1
+        return self.history[self.step]
+
+    def history_redo(self):
+        if self.step == len(self.history):
+            return None
+
+        item = self.history[self.step]
+        self.step += 1
+        return item
+
+
+
 
 if __name__ == "__main__":
     import sys

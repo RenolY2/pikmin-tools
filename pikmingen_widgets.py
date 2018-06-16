@@ -135,7 +135,6 @@ class GenMapViewer(QWidget):
         self.origin_x = self.SIZEX // 2
         self.origin_z = self.SIZEY // 2
 
-
     def reset(self):
         del self.waypoints
         del self.paths
@@ -191,6 +190,11 @@ class GenMapViewer(QWidget):
         self.connect_second_wp = None
 
         self.mousemode = mode
+
+        if self.mousemode == MOUSE_MODE_NONE:
+            self.setContextMenuPolicy(Qt.CustomContextMenu)
+        else:
+            self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
     @property
     def zoom_factor(self):
@@ -333,7 +337,7 @@ class GenMapViewer(QWidget):
 
         if self.visualize_cursor is not None:
             a, b = self.visualize_cursor
-            size = 5
+            size = ENTITY_SIZE
             p.drawRect(a-size//2, b-size//2, size, size)
 
         pen.setColor(QColor("red"))
@@ -469,13 +473,12 @@ class GenMapViewer(QWidget):
                 movetox = mouse_x/scalex + midx
                 movetoz = mouse_z/scalez + midz
 
-                if len(self.move_startpos) > 0:
-                    sumx,sumz = 0, 0
-                    wpcount = len(self.move_startpos)
-                    waypoints = self.pikmin_routes.waypoints
-                    for wp_index in self.move_startpos:
-                        sumx += waypoints[wp_index][0]
-                        sumz += waypoints[wp_index][2]
+                if len(self.selected) > 0:
+                    sumx, sumz = 0, 0
+                    wpcount = len(self.selected)
+                    for obj in self.move_startpos:
+                        sumx += obj.x
+                        sumz += obj.z
 
                     x = sumx/float(wpcount)
                     z = sumz/float(wpcount)
@@ -600,20 +603,20 @@ class GenMapViewer(QWidget):
                 movetox = mouse_x/scalex + midx
                 movetoz = mouse_z/scalez + midz
 
-                if len(self.move_startpos) > 0:
-                    sumx,sumz = 0, 0
-                    wpcount = len(self.move_startpos)
-                    waypoints = self.pikmin_routes.waypoints
-                    for wp_index in self.move_startpos:
-                        sumx += waypoints[wp_index][0]
-                        sumz += waypoints[wp_index][2]
+                if len(self.selected) > 0:
+                    sumx, sumz = 0, 0
+                    objcount = len(self.selected)
+                    objects = self.pikmin_generators.objects
+                    for object in self.selected:
+                        sumx += object.x
+                        sumz += object.z
 
-                    x = sumx/float(wpcount)
-                    z = sumz/float(wpcount)
+                    x = sumx/float(objcount)
+                    z = sumz/float(objcount)
 
                     self.move_points.emit(movetox-x, movetoz-z)
 
-        if True:#self.highlighttriangle is not None:
+        if True:  # self.highlighttriangle is not None:
             mouse_x, mouse_z = (event.x(), event.y())
             mapx = mouse_x/scalex + midx
             mapz = mouse_z/scalez + midz
@@ -622,14 +625,15 @@ class GenMapViewer(QWidget):
                 height = self.collision.collide_ray_downwards(mapx, mapz)
 
                 if height is not None:
-                    #self.highlighttriangle = res[1:]
-                    #self.update()
+                    # self.highlighttriangle = res[1:]
+                    # self.update()
                     self.position_update.emit(event, (round(mapx, 2), round(height, 2), round(mapz, 2)))
                 else:
                     self.position_update.emit(event, (round(mapx, 2), None, round(mapz,2)))
             else:
                 self.position_update.emit(event, (round(mapx, 2), None, round(mapz, 2)))
-        #self.mouse_dragged.emit(event)
+        # self.mouse_dragged.emit(event)
+
     @catch_exception
     def mouseReleaseEvent(self, event):
         """if self.left_button_down:
@@ -692,13 +696,16 @@ class PikminSideWidget(QWidget):
         self.button_remove_object = QPushButton(parent)
         self.button_ground_object = QPushButton(parent)
         self.button_move_object = CheckableButton(parent)
-        self.button_edit_object = CheckableButton(parent)
+        self.button_edit_object = QPushButton(parent)
 
         self.button_add_object.setText("Add Object")
         self.button_remove_object.setText("Remove Object(s)")
         self.button_ground_object.setText("Ground Object(s)")
         self.button_move_object.setText("Move Object(s)")
         self.button_edit_object.setText("Edit Object")
+
+        self.button_add_object.setCheckable(True)
+        self.button_move_object.setCheckable(True)
 
         self.lineedit_coordinatex = QLineEdit(parent)
         self.lineedit_coordinatey = QLineEdit(parent)
@@ -775,7 +782,7 @@ class PikminSideWidget(QWidget):
 
 class PikObjectEditor(QMdiSubWindow):
     triggered = pyqtSignal(object)
-    closing = pyqtSignal(object)
+    closing = pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         if "windowtype" in kwargs:
@@ -835,6 +842,9 @@ class PikObjectEditor(QMdiSubWindow):
         self.verticalLayout.addWidget(self.button_savetext)
         self.setWindowTitle(self.windowname)
 
+    def closeEvent(self, event):
+        self.closing.emit()
+
     def set_content(self, pikminobject):
         try:
             text = StringIO()
@@ -884,7 +894,7 @@ class PikObjectEditor(QMdiSubWindow):
         pass
 
 
-class AddPikObjectWindow(QMdiSubWindow):
+class AddPikObjectWindow(PikObjectEditor):
     @catch_exception
     def __init__(self, *args, **kwargs):
         if "windowtype" in kwargs:
