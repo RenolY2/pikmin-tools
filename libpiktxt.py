@@ -275,7 +275,9 @@ class PikminGenFile(PikminTxt):
         del self.objects
         self.objects = []
 
-        assert generator_count == len(self._root) - 4
+        #assert generator_count == len(self._root) - 4
+        if generator_count != len(self._root) - 4:
+            print("Warning: Generator count is", generator_count, "but file has", len(self._root) - 4, "Generators")
 
         if generator_count > 0:
             for generator in self._root[4:]:
