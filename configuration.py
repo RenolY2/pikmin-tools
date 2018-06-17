@@ -25,6 +25,11 @@ def make_default_config():
         "GroundWaypointsWhenMoving": "False"
     }
 
+    cfg["gen editor"] = {
+        "InvertZoom": "False",
+        "GroundObjectsWhenMoving": "False"
+    }
+
     with open("piktool.ini", "w") as f:
         cfg.write(f)
 
