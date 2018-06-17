@@ -25,6 +25,7 @@ from lib.rarc import Archive
 
 PIKMIN2GEN = "Generator files (defaultgen.txt;initgen.txt;plantsgen.txt;*.txt)"
 
+
 class GenEditor(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -39,54 +40,46 @@ class GenEditor(QMainWindow):
             print(e)
             print("creating file...")
             self.configuration = make_default_config()
-        #self.ground_wp_when_moving = self.configuration["ROUTES EDITOR"].getboolean("groundwaypointswhenmoving")
 
         self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
+        self.pikmin_gen_view.editorconfig = self.configuration["gen editor"]
 
         self.pathsconfig = self.configuration["default paths"]
-        self.editorconfig = self.configuration["routes editor"]
-        #self.pikminroutes_screen.editorconfig = self.editorconfig
+        self.editorconfig = self.configuration["gen editor"]
+        self.current_gen_path = None
 
         self.current_coordinates = None
         self.editing_windows = {}
         self.add_object_window = None
         self.object_to_be_added = None
 
-        self.history = EditorHistory()
+        self.history = EditorHistory(20)
+        self.edit_spawn_window = None
 
+    @catch_exception
     def reset(self):
-        pass
+        self.history.reset()
+        self.object_to_be_added = None
+        self.pikmin_gen_view.reset(keep_collision=True)
 
-    #@catch_exception
-    def button_load_level(self):
-        filepath, choosentype = QFileDialog.getOpenFileName(
-            self, "Open File",
-            self.pathsconfig["gen"],
-            PIKMIN2GEN + ";;All files (*)")
-        print("doooone")
-        if filepath:
-            print("resetting")
-            self.reset()
-            print("done")
-            print("chosen type:", choosentype)
+        self.current_coordinates = None
+        for key, val in self.editing_windows.items():
+            val.destroy()
 
-            with open(filepath, "r", encoding="shift-jis") as f:
-                try:
-                    self.pikmin_gen_file = PikminGenFile()
-                    self.pikmin_gen_file.from_file(f)
+        self.editing_windows = {}
 
-                    self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
-                    self.pikmin_gen_view.update()
+        if self.add_object_window is not None:
+            self.add_object_window.destroy()
+            self.add_object_window = None
 
-                    print("ok")
-                    # self.bw_map_screen.update()
-                    # path_parts = path.split(filepath)
-                    self.setWindowTitle("Pikmin 2 Generators Editor - {0}".format(filepath))
-                    self.pathsconfig["gen"] = filepath
-                    save_cfg(self.configuration)
-                except Exception as error:
-                    print("error", error)
-                    traceback.print_exc()
+        if self.edit_spawn_window is not None:
+            self.edit_spawn_window.destroy()
+            self.edit_spawn_window = None
+
+        self.current_gen_path = None
+        self.pik_control.reset_info()
+        self.pik_control.button_add_object.setChecked(False)
+        self.pik_control.button_move_object.setChecked(False)
 
     def setup_ui(self):
         self.resize(1000, 800)
@@ -120,48 +113,71 @@ class GenEditor(QMainWindow):
     def setup_ui_menubar(self):
         self.menubar = QMenuBar(self)
         self.file_menu = QMenu(self)
+        self.file_menu.setTitle("File")
+
+        save_file_shortcut = QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self.file_menu)
+        save_file_shortcut.activated.connect(self.button_save_level)
 
         self.file_load_action = QAction("Load", self)
+        self.save_file_action = QAction("Save", self)
+        self.save_file_as_action = QAction("Save As", self)
+        self.save_file_action.setShortcut("Ctrl+S")
+
         self.file_load_action.triggered.connect(self.button_load_level)
+        self.save_file_action.triggered.connect(self.button_save_level)
+        self.save_file_as_action.triggered.connect(self.button_save_level_as)
+
         self.file_menu.addAction(self.file_load_action)
-        self.file_menu.setTitle("File")
+        self.file_menu.addAction(self.save_file_action)
+        self.file_menu.addAction(self.save_file_as_action)
+
 
         # ------ Collision Menu
         self.collision_menu = QMenu(self.menubar)
+        self.collision_menu.setTitle("Geometry")
         self.collision_load_action = QAction("Load .OBJ", self)
         self.collision_load_action.triggered.connect(self.button_load_collision)
         self.collision_menu.addAction(self.collision_load_action)
         self.collision_load_grid_action = QAction("Load GRID.BIN", self)
         self.collision_load_grid_action.triggered.connect(self.button_load_collision_grid)
         self.collision_menu.addAction(self.collision_load_grid_action)
-        self.collision_menu.setTitle("Geometry")
+
+
+        # Misc
+        self.misc_menu = QMenu(self.menubar)
+        self.misc_menu.setTitle("Misc")
+        self.spawnpoint_action = QAction("Set startPos/Dir", self)
+        self.spawnpoint_action.triggered.connect(self.action_open_rotationedit_window)
+        self.misc_menu.addAction(self.spawnpoint_action)
 
         self.menubar.addAction(self.file_menu.menuAction())
         self.menubar.addAction(self.collision_menu.menuAction())
+        self.menubar.addAction(self.misc_menu.menuAction())
         self.setMenuBar(self.menubar)
 
     def setup_ui_toolbar(self):
-        self.toolbar = QtWidgets.QToolBar("Test", self)
-        self.toolbar.addAction(QAction("TestToolbar", self))
-        self.toolbar.addAction(QAction("TestToolbar2", self))
-        self.toolbar.addAction(QAction("TestToolbar3", self))
+        # self.toolbar = QtWidgets.QToolBar("Test", self)
+        # self.toolbar.addAction(QAction("TestToolbar", self))
+        # self.toolbar.addAction(QAction("TestToolbar2", self))
+        # self.toolbar.addAction(QAction("TestToolbar3", self))
 
-        self.toolbar2 = QtWidgets.QToolBar("Second Toolbar", self)
-        self.toolbar2.addAction(QAction("I like cake", self))
+        # self.toolbar2 = QtWidgets.QToolBar("Second Toolbar", self)
+        # self.toolbar2.addAction(QAction("I like cake", self))
 
-        self.addToolBar(self.toolbar)
-        self.addToolBarBreak()
-        self.addToolBar(self.toolbar2)
+        # self.addToolBar(self.toolbar)
+        # self.addToolBarBreak()
+        # self.addToolBar(self.toolbar2)
+        pass
 
     def connect_actions(self):
         self.pikmin_gen_view.select_update.connect(self.action_update_info)
-        self.pik_control.lineedit_coordinatex.editingFinished.connect(self.create_field_edit_action("coordinatex"))
-        self.pik_control.lineedit_coordinatey.editingFinished.connect(self.create_field_edit_action("coordinatey"))
-        self.pik_control.lineedit_coordinatez.editingFinished.connect(self.create_field_edit_action("coordinatez"))
+        self.pik_control.lineedit_coordinatex.textChanged.connect(self.create_field_edit_action("coordinatex"))
+        self.pik_control.lineedit_coordinatey.textChanged.connect(self.create_field_edit_action("coordinatey"))
+        self.pik_control.lineedit_coordinatez.textChanged.connect(self.create_field_edit_action("coordinatez"))
 
-        self.pik_control.lineedit_rotationx.editingFinished.connect(self.create_field_edit_action("rotationx"))
-        self.pik_control.lineedit_rotationy.editingFinished.connect(self.create_field_edit_action("rotationy"))
-        self.pik_control.lineedit_rotationz.editingFinished.connect(self.create_field_edit_action("rotationz"))
+        self.pik_control.lineedit_rotationx.textChanged.connect(self.create_field_edit_action("rotationx"))
+        self.pik_control.lineedit_rotationy.textChanged.connect(self.create_field_edit_action("rotationy"))
+        self.pik_control.lineedit_rotationz.textChanged.connect(self.create_field_edit_action("rotationz"))
 
         self.pikmin_gen_view.position_update.connect(self.action_update_position)
 
@@ -183,6 +199,80 @@ class GenEditor(QMainWindow):
 
         redo_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(Qt.CTRL + Qt.Key_Y), self)
         redo_shortcut.activated.connect(self.action_redo)
+
+    def action_open_rotationedit_window(self):
+        print("wot")
+        if self.edit_spawn_window is None:
+            self.edit_spawn_window = pikwidgets.SpawnpointEditor()
+            self.edit_spawn_window.position.setText("{0}, {1}, {2}".format(
+                self.pikmin_gen_file.startpos_x, self.pikmin_gen_file.startpos_y, self.pikmin_gen_file.startpos_z
+            ))
+            self.edit_spawn_window.rotation.setText(str(self.pikmin_gen_file.startdir))
+            self.edit_spawn_window.closing.connect(self.action_close_edit_startpos_window)
+            self.edit_spawn_window.button_savetext.pressed.connect(self.action_save_startpos)
+            self.edit_spawn_window.show()
+
+    #@catch_exception
+    def button_load_level(self):
+        filepath, choosentype = QFileDialog.getOpenFileName(
+            self, "Open File",
+            self.pathsconfig["gen"],
+            PIKMIN2GEN + ";;All files (*)")
+        print("doooone")
+        if filepath:
+            print("resetting")
+            self.reset()
+            print("done")
+            print("chosen type:", choosentype)
+
+            with open(filepath, "r", encoding="shift-jis") as f:
+                try:
+                    self.pikmin_gen_file = PikminGenFile()
+                    self.pikmin_gen_file.from_file(f)
+
+                    self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
+                    self.pikmin_gen_view.update()
+
+                    print("ok")
+                    # self.bw_map_screen.update()
+                    # path_parts = path.split(filepath)
+                    self.setWindowTitle("Pikmin 2 Generators Editor - {0}".format(filepath))
+                    self.pathsconfig["gen"] = filepath
+                    save_cfg(self.configuration)
+                    self.current_gen_path = filepath
+
+                except Exception as error:
+                    print("error", error)
+                    traceback.print_exc()
+
+    def button_save_level(self):
+        if self.current_gen_path is not None:
+            with open(self.current_gen_path, "w", encoding="shift-jis") as f:
+                try:
+                    self.pikmin_gen_file.write(f)
+                except Exception as error:
+                    print("error", error)
+                    traceback.print_exc()
+        else:
+            self.button_save_level_as()
+
+    def button_save_level_as(self):
+        filepath, choosentype = QFileDialog.getSaveFileName(
+            self, "Save File",
+            self.pathsconfig["gen"],
+            PIKMIN2GEN + ";;All files (*)")
+        if filepath:
+            with open(filepath, "w", encoding="shift-jis") as f:
+                try:
+                    self.pikmin_gen_file.write(f)
+                    self.setWindowTitle("Pikmin 2 Generators Editor - {0}".format(filepath))
+                    self.pathsconfig["gen"] = filepath
+                    save_cfg(self.configuration)
+                    self.current_gen_path = filepath
+
+                except Exception as error:
+                    print("error", error)
+                    traceback.print_exc()
 
     def button_load_collision(self):
         try:
@@ -213,6 +303,20 @@ class GenEditor(QMainWindow):
         except:
             traceback.print_exc()
 
+    def action_close_edit_startpos_window(self):
+        self.edit_spawn_window.destroy()
+        self.edit_spawn_window = None
+
+    @catch_exception
+    def action_save_startpos(self):
+        pos, direction = self.edit_spawn_window.get_pos_dir()
+        self.pikmin_gen_file.startpos_x = pos[0]
+        self.pikmin_gen_file.startpos_y = pos[1]
+        self.pikmin_gen_file.startpos_z = pos[2]
+        self.pikmin_gen_file.startdir = direction
+
+        self.pikmin_gen_view.update()
+
     def button_open_add_item_window(self):
         if self.add_object_window is None:
             self.add_object_window = pikwidgets.AddPikObjectWindow()
@@ -241,6 +345,7 @@ class GenEditor(QMainWindow):
         # self.add_object_window.destroy()
         self.add_object_window = None
         self.pik_control.button_add_object.setChecked(False)
+        self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
         print("okdone")
 
     @catch_exception
@@ -272,9 +377,15 @@ class GenEditor(QMainWindow):
             obj.offset_x = 0
             obj.offset_z = 0
 
+            if self.editorconfig["GroundObjectsWhenMoving"] is True:
+                if self.pikmin_gen_view.collision is not None:
+                    y = self.pikmin_gen_view.collision.collide_ray_downwards(obj.x, obj.z)
+                    obj.y = obj.position_y = y
+                    obj.offset_y = 0
+
         if len(self.pikmin_gen_view.selected) == 1:
             obj = self.pikmin_gen_view.selected[0]
-            self.pik_control.set_info(obj.object_type, (obj.x, obj.y, obj.z), obj.get_rotation())
+            self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
 
         self.pikmin_gen_view.update()
 
@@ -290,7 +401,7 @@ class GenEditor(QMainWindow):
 
         if len(self.pikmin_gen_view.selected) == 1:
             obj = self.pikmin_gen_view.selected[0]
-            self.pik_control.set_info(obj.object_type, (obj.x, obj.y, obj.z), obj.get_rotation())
+            self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
 
     def action_delete_objects(self):
         tobedeleted = []
@@ -312,11 +423,11 @@ class GenEditor(QMainWindow):
 
         if action == "AddObject":
             obj = val
-            self.pikmin_gen_file.objects.remove(val)
+            self.pikmin_gen_file.objects.remove(obj)
             if len(self.pikmin_gen_view.selected) == 1 and self.pikmin_gen_view.selected[0] is obj:
                 self.pik_control.reset_info()
-            if val in self.pikmin_gen_view.selected:
-                self.pikmin_gen_view.selected.remove(val)
+            if obj in self.pikmin_gen_view.selected:
+                self.pikmin_gen_view.selected.remove(obj)
 
             self.pikmin_gen_view.update()
 
@@ -342,11 +453,11 @@ class GenEditor(QMainWindow):
 
         if action == "RemoveObjects":
             for obj in val:
-                self.pikmin_gen_file.objects.remove(val)
+                self.pikmin_gen_file.objects.remove(obj)
                 if len(self.pikmin_gen_view.selected) == 1 and self.pikmin_gen_view.selected[0] is obj:
                     self.pik_control.reset_info()
-                if val in self.pikmin_gen_view.selected:
-                    self.pikmin_gen_view.selected.remove(val)
+                if obj in self.pikmin_gen_view.selected:
+                    self.pikmin_gen_view.selected.remove(obj)
 
             self.pikmin_gen_view.update()
 
@@ -355,7 +466,7 @@ class GenEditor(QMainWindow):
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
                 self.pathsconfig["collision"],
-                "Grid.bin (*.bin);;Archived grid.bin (texts.arc, texts.szs);;All files (*)")
+                "Archived grid.bin (texts.arc, texts.szs);;Grid.bin (*.bin);;All files (*)")
 
             if (choosentype == "Archived grid.bin (texts.arc, texts.szs)"
                     or filepath.endswith(".szs")
@@ -393,9 +504,10 @@ class GenEditor(QMainWindow):
         attribute = "lineedit_"+fieldname
 
         @catch_exception
-        def change_field():
+        def change_field(text):
             try:
-                val = float(getattr(self.pik_control, attribute).text())
+                #val = float(getattr(self.pik_control, attribute).text())
+                val = float(text)
             except Exception as e:
                 print(e)
             else:
@@ -408,7 +520,6 @@ class GenEditor(QMainWindow):
                         setattr(pikobject, "position_"+coord, val)
                         setattr(pikobject, "offset_"+coord, 0)  # We reset offset to 0 for ease
 
-                        self.pikmin_gen_view.update()
                     elif fieldname.startswith("rotation"):
                         if pikobject.object_type == "{item}":
                             if coord == "x": pikobject.set_rotation((val, None, None))
@@ -417,6 +528,7 @@ class GenEditor(QMainWindow):
                             print("rotation set")
                         elif pikobject.object_type == "{teki}":
                             pikobject.set_rotation((None, val, None))
+                    self.pikmin_gen_view.update()
 
         return change_field
 
@@ -439,15 +551,22 @@ class GenEditor(QMainWindow):
                         newobj = self.editing_windows[currentobj].get_content()
                         if newobj is not None:
                             currentobj.from_pikmin_object(newobj)
-                            self.pik_control.set_info(currentobj.object_type,
+                            self.pik_control.set_info(currentobj,
                                                       (currentobj.x, currentobj.y, currentobj.z),
                                                       currentobj.get_rotation())
                             self.pikmin_gen_view.update()
 
-                    self.editing_windows[currentobj].button_savetext.pressed.connect(action_editwindow_save_data)
+                    def action_close_edit_window():
+                        print("closing")
+                        self.editing_windows[currentobj].destroy()
+                        del self.editing_windows[currentobj]
 
+                    self.editing_windows[currentobj].button_savetext.pressed.connect(action_editwindow_save_data)
+                    self.editing_windows[currentobj].closing.connect(action_close_edit_window)
                     self.editing_windows[currentobj].show()
 
+                else:
+                    self.editing_windows[currentobj].activateWindow()
     @catch_exception
     def action_update_info(self, event):
         if self.pikmin_gen_file is not None:
@@ -455,7 +574,7 @@ class GenEditor(QMainWindow):
             if len(self.pikmin_gen_view.selected) == 1:
                 currentobj = selected[0]
 
-                self.pik_control.set_info(currentobj.object_type,
+                self.pik_control.set_info(currentobj,
                                           (currentobj.x, currentobj.y, currentobj.z),
                                           currentobj.get_rotation())
 
@@ -476,9 +595,8 @@ class GenEditor(QMainWindow):
         context_menu.destroy()
 
     def action_copy_coords_to_clipboard(self):
-        print("foobar", self.current_coordinates)
-
-        QApplication.clipboard().setText(", ".join(str(x) for x in self.current_coordinates))
+        if self.current_coordinates is not None:
+            QApplication.clipboard().setText(", ".join(str(x) for x in self.current_coordinates))
 
     def action_update_position(self, event, pos):
         self.current_coordinates = pos
@@ -486,7 +604,13 @@ class GenEditor(QMainWindow):
 
 
 class EditorHistory(object):
-    def __init__(self):
+    def __init__(self, historysize):
+        self.history = []
+        self.step = 0
+        self.historysize = historysize
+
+    def reset(self):
+        del self.history
         self.history = []
         self.step = 0
 
@@ -501,8 +625,8 @@ class EditorHistory(object):
             self.step += 1
             assert len(self.history) == self.step
 
-        if len(self.history) > 10:
-            for i in range(len(self.history) - 10):
+        if len(self.history) > self.historysize:
+            for i in range(len(self.history) - self.historysize):
                 self.history.pop(0)
                 self.step -= 1
 

@@ -18,10 +18,11 @@ from PyQt5.QtCore import Qt
 
 from helper_functions import calc_zoom_in_factor, calc_zoom_out_factor
 
-from custom_widgets import (MapViewer, rotate,
+from custom_widgets import (MapViewer, rotate_rel,
                             catch_exception, CheckableButton, Collision)
 from pikmingen import PikminObject
 from libpiktxt import PikminTxt
+import pikmingen
 
 ENTITY_SIZE = 10
 
@@ -38,6 +39,12 @@ MOUSE_MODE_NONE = 0
 MOUSE_MODE_MOVEWP = 1
 MOUSE_MODE_ADDWP = 2
 MOUSE_MODE_CONNECTWP = 3
+
+
+ONION_COLORTABLE = {pikmingen.ONYN_ROCKET: QColor("grey"),
+                    pikmingen.ONYN_BLUEONION: QColor("blue"),
+                    pikmingen.ONYN_REDONION: QColor(255, 55, 55),
+                    pikmingen.ONYN_YELLOWONION: QColor(255, 212, 0)}
 
 
 class GenMapViewer(QWidget):
@@ -78,10 +85,6 @@ class GenMapViewer(QWidget):
         # This value is used for switching between several entities that overlap.
         self.next_selected_index = 0
 
-        #self.entities = [(0,0, "abc")]
-        self.waypoints = {}#{"abc": (0, 0)}
-        self.paths = []
-
         self.left_button_down = False
         self.mid_button_down = False
         self.right_button_down = False
@@ -96,7 +99,7 @@ class GenMapViewer(QWidget):
 
         self.p = QPainter()
         self.p2 = QPainter()
-        self.show_terrain_mode = SHOW_TERRAIN_REGULAR
+        # self.show_terrain_mode = SHOW_TERRAIN_REGULAR
 
         self.selectionbox_start = None
         self.selectionbox_end = None
@@ -117,14 +120,12 @@ class GenMapViewer(QWidget):
 
         self.mousemode = MOUSE_MODE_NONE
 
-        self.connect_first_wp = None
-        self.connect_second_wp = None
-
-        self.move_startpos = []
         self.overlapping_wp_index = 0
         self.editorconfig = None
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
+
+        self.spawnpoint = None
 
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
@@ -135,15 +136,10 @@ class GenMapViewer(QWidget):
         self.origin_x = self.SIZEX // 2
         self.origin_z = self.SIZEY // 2
 
-    def reset(self):
-        del self.waypoints
-        del self.paths
+    def reset(self, keep_collision=False):
         self.overlapping_wp_index = 0
 
-        self.waypoints = {}
-        self.paths = []
-
-        self.SIZEX = 1024#768#1024
+        self.SIZEX = 1024
         self.SIZEY = 1024
         self.origin_x = self.SIZEX//2
         self.origin_z = self.SIZEY//2
@@ -163,31 +159,20 @@ class GenMapViewer(QWidget):
 
         self.selected = []
 
-        #self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
-        #self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
-
-        self.level_image = None
-        #del self.collision
-        #self.collision = None
-
-        self.highlighttriangle = None
+        if not keep_collision:
+            # Potentially: Clear collision object too?
+            self.level_image = None
 
         self.pikmin_generators = None
 
         self.mousemode = MOUSE_MODE_NONE
-        self.connect_first_wp = None
-        self.connect_second_wp = None
-
-        self.move_startpos = []
+        self.spawnpoint = None
 
     def set_collision(self, verts, faces):
         self.collision = Collision(verts, faces)
 
     def set_mouse_mode(self, mode):
         assert mode in (MOUSE_MODE_NONE, MOUSE_MODE_ADDWP, MOUSE_MODE_CONNECTWP, MOUSE_MODE_MOVEWP)
-
-        self.connect_first_wp = None
-        self.connect_second_wp = None
 
         self.mousemode = mode
 
@@ -201,19 +186,9 @@ class GenMapViewer(QWidget):
         return self._zoom_factor/10.0
 
     def zoom(self, fac):
-        if (self.zoom_factor + fac) > 0.1 and (self.zoom_factor + fac) <= 25:
+        if 0.1 < (self.zoom_factor + fac) <= 25:
             self._zoom_factor += int(fac*10)
-            #self.zoom_factor = round(self.zoom_factor, 2)
-            zf = self.zoom_factor
-            #self.setMinimumSize(QSize(self.SIZEX*zf, self.SIZEY*zf))
-            #self.setMaximumSize(QSize(self.SIZEX*zf, self.SIZEY*zf))
-
-            #self.terrain_buffer = QImage()
             self.update()
-            """if self.terrain is not None:
-                if self.terrain_scaled is None:
-                    self.terrain_scaled = self.terrain
-                self.terrain_scaled = self.terrain_scaled.scaled(self.height(), self.width())"""
 
     @catch_exception
     def paintEvent(self, event):
@@ -223,7 +198,6 @@ class GenMapViewer(QWidget):
         p.begin(self)
         h = self.height()
         w = self.width()
-        print(h, w)
 
 
         zf = self.zoom_factor
@@ -305,6 +279,23 @@ class GenMapViewer(QWidget):
                 p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
 
         if self.pikmin_generators is not None:
+            # Draw spawnpoint
+            x, z, rotation = self.pikmin_generators.startpos_x, self.pikmin_generators.startpos_z, self.pikmin_generators.startdir
+            x, z = (x - midx) * scalex, (z - midz) * scalez
+
+            pen.setColor(QColor("orange"))
+            pen.setWidth(10)
+            p.setPen(pen)
+
+            size = ENTITY_SIZE*scalex + 1
+            p.drawRect(x - size // 2, z - size // 2, size, size)
+
+            pen.setColor(QColor("black"))
+            pen.setWidth(prevwidth)
+            p.setPen(pen)
+
+            # draw spawnpoint end
+
             selected = self.selected
             objects = self.pikmin_generators.objects
             #links = self.pikmin_routes.links
@@ -313,9 +304,20 @@ class GenMapViewer(QWidget):
                 x,y,z = pikminobject.x, pikminobject.y, pikminobject.z
 
                 color = DEFAULT_ENTITY
+
+                drawcircle = False
+                isselected = False
+                if pikminobject.object_type == "{item}":
+
+                    name = pikminobject.get_useful_object_name()
+                    if name in ONION_COLORTABLE:
+                        color = ONION_COLORTABLE[name]
+                        drawcircle = True
+
                 if pikminobject in selected:
                     # print("vhanged")
                     color = QColor("red")
+                    isselected = True
 
                 # x, z = offsetx + x*zf, offsetz + z*zf
                 x, z = (x-midx)*scalex, (z-midz)*scalez
@@ -325,8 +327,35 @@ class GenMapViewer(QWidget):
                     p.setPen(color)
                     #p.setPen(QColor(color))
                     last_color = color
-                size=ENTITY_SIZE
-                p.drawRect(x-size//2, z-size//2, size, size)
+
+                if isselected:
+                    p.setPen(QColor("blue"))
+                    angle = pikminobject.get_horizontal_rotation()
+                    if angle is not None:
+                        pointx = x
+                        pointz = z + 25*scalez
+                        relx, relz = rotate_rel(pointx, pointz, x, z, angle)
+                        p.drawLine(x, z, x-relx, z+relz)
+
+                size = ENTITY_SIZE*scalex
+
+                if drawcircle:
+                    if not isselected:
+                        p.setBrush(DEFAULT_ENTITY)
+                        p.setPen(DEFAULT_ENTITY)
+                    else:
+                        p.setBrush(color)
+                        p.setPen(color)
+
+
+                    p.drawEllipse(x-(size//2)-2, z-(size//2)-2, size+4, size+4)
+
+                    p.setBrush(color)
+                    p.setPen(color)
+
+                    p.drawEllipse(x - size // 2, z - size // 2, size, size)
+                else:
+                    p.drawRect(x-size//2, z-size//2, size, size)
 
             arrows = []
             pen = p.pen()
@@ -345,7 +374,6 @@ class GenMapViewer(QWidget):
         p.setPen(pen)
 
         if self.selectionbox_start is not None and self.selectionbox_end is not None:
-            print("selectionbox")
             startx, startz = ((self.selectionbox_start[0] - midx)*scalex,
                               (self.selectionbox_start[1] - midz)*scalez)
 
@@ -430,23 +458,22 @@ class GenMapViewer(QWidget):
                     #if abs(x-mouse_x) < radius and abs(z-mouse_z) < radius:
                     #if ((x-way_x)**2 + (z-way_z)**2)**0.5 < radius_actual:
                     #    all_hit_waypoints.append(wp_index)
-                    print(abs(x-objx), abs(z-objz))
+                    # print(abs(x-objx), abs(z-objz))
                     if abs(mouse_x-objx) <= ENTITY_SIZE and abs(mouse_z - objz) <= ENTITY_SIZE:
-                        print("hit!")
+                        # print("hit!")
                         all_hit_waypoints.append(pikminobject)
-
 
                 if len(all_hit_waypoints) > 0:
                     wp_index = all_hit_waypoints[self.overlapping_wp_index%len(all_hit_waypoints)]
                     self.selected = [wp_index]
-                    print("hit")
+                    # print("hit")
                     hit = True
                     self.select_update.emit(event)
 
-                    if self.connect_first_wp is not None and self.mousemode == MOUSE_MODE_CONNECTWP:
-                        self.connect_update.emit(self.connect_first_wp, wp_index)
-                    self.connect_first_wp = wp_index
-                    self.move_startpos = [wp_index]
+                    #if self.connect_first_wp is not None and self.mousemode == MOUSE_MODE_CONNECTWP:
+                    #    self.connect_update.emit(self.connect_first_wp, wp_index)
+                    #self.connect_first_wp = wp_index
+                    #self.move_startpos = [wp_index]
                     self.update()
                     self.overlapping_wp_index = (self.overlapping_wp_index+1)%len(all_hit_waypoints)
 
@@ -572,7 +599,6 @@ class GenMapViewer(QWidget):
 
             selected = []
             #centerx, centerz = 0, 0
-            print("Stuff here")
             if self.pikmin_generators is not None:
                 for pikminobject in self.pikmin_generators.objects:
                     #objx, objz = (pikminobject.x - midx)*scalex, (pikminobject.z - midz)*scalez
@@ -754,8 +780,8 @@ class PikminSideWidget(QWidget):
         self.lineedit_rotationy.setDisabled(True)
         self.lineedit_rotationz.setDisabled(True)
 
-    def set_info(self, objtype, position, rotation=None):
-        self.name_label.setText("Selected: {}".format(objtype))
+    def set_info(self, obj, position, rotation=None):
+        self.name_label.setText("Selected: {}".format(obj.get_useful_object_name()))
 
         self.lineedit_coordinatex.setDisabled(False)
         self.lineedit_coordinatey.setDisabled(False)
@@ -966,3 +992,52 @@ class AddPikObjectWindow(PikObjectEditor):
             with open(os.path.join("./object_templates", filename), "r", encoding="utf-8") as f:
                 self.textbox_xml.setText(f.read())
 
+
+class SpawnpointEditor(QMdiSubWindow):
+    triggered = pyqtSignal(object)
+    closing = pyqtSignal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.centralwidget = QWidget(self)
+        self.setWidget(self.centralwidget)
+        self.entity = None
+        self.resize(400, 200)
+
+        font = QFont()
+        font.setFamily("Consolas")
+        font.setStyleHint(QFont.Monospace)
+        font.setFixedPitch(True)
+        font.setPointSize(10)
+        self.verticalLayout = QVBoxLayout(self.centralwidget)
+
+        self.position = QLineEdit(self.centralwidget)
+        self.rotation = QLineEdit(self.centralwidget)
+
+        self.button_savetext = QPushButton(self.centralwidget)
+        self.button_savetext.setText("Set Data")
+        self.button_savetext.setMaximumWidth(400)
+
+        self.verticalLayout.addWidget(QLabel("startPos"))
+        self.verticalLayout.addWidget(self.position)
+        self.verticalLayout.addWidget(QLabel("startDir"))
+        self.verticalLayout.addWidget(self.rotation)
+        self.verticalLayout.addWidget(self.button_savetext)
+        self.setWindowTitle("Edit startPos/Dir")
+
+    def closeEvent(self, event):
+        self.closing.emit()
+
+    def get_pos_dir(self):
+        pos = self.position.text().strip()
+        direction = float(self.rotation.text().strip())
+
+        if "," in pos:
+            pos = [float(x.strip()) for x in pos.split(",")]
+        else:
+            pos = [float(x.strip()) for x in pos.split(" ")]
+
+        assert len(pos) == 3
+
+        return pos, direction

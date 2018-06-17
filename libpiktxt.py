@@ -189,14 +189,8 @@ class RouteTxt(PikminTxt):
         self.waypoints = {}
         self.links = {}
 
-
         waypoint_count = int(self._root[0])
         assert waypoint_count == len(self._root) - 1
-
-        # Prefill waypoints with placeholder value so we can add waypoints at specific indices
-        #self.waypoints.extend(None for x in range(waypoint_count))
-
-
 
         if waypoint_count > 0:
             for waypoint in self._root[1:]:
@@ -298,7 +292,6 @@ class PikminGenFile(PikminTxt):
             node = pikminobject.to_textnode()
             self._root.append(node)
 
-        print(len(self._root))
         super().write(f, *args, **kwargs)
 
 

@@ -10,6 +10,10 @@ class TextRoot(list):
 class TextNode(list):
     pass
 
+ONYN_ROCKET = "Rocket"
+ONYN_REDONION = "Red Onion"
+ONYN_YELLOWONION = "Yellow Onion"
+ONYN_BLUEONION = "Blue Onion"
 
 class PikminObject(object):
     def __init__(self):
@@ -50,7 +54,7 @@ class PikminObject(object):
 
         self._object_data = textnode[7:]  # All the remaining data, differs per object type
 
-        print("Object", self.identifier, "with position", self.position_x, self.position_y, self.position_z)
+        #print("Object", self.identifier, "with position", self.position_x, self.position_y, self.position_z)
 
     def from_pikmin_object(self, other_pikminobj):
         self.version = other_pikminobj.version
@@ -91,12 +95,39 @@ class PikminObject(object):
         else:
             return None
 
+    def get_useful_object_name(self):
+        if self.object_type == "{item}":
+            itemdata = self._object_data[0]
+            subtype = itemdata[0]
+
+            if subtype == "{onyn}":
+                oniontype = itemdata[3]
+                if oniontype == "4":
+                    return ONYN_ROCKET
+                elif oniontype == "2":
+                    return ONYN_YELLOWONION
+                elif oniontype == "1":
+                    return ONYN_REDONION
+                elif oniontype == "0":
+                    return ONYN_BLUEONION
+
+            return self.object_type+subtype
+        else:
+            return self.object_type
+
+    def get_horizontal_rotation(self):
+        if self.object_type == "{item}":
+            return float(self._object_data[0][1][1])
+        elif self.object_type == "{teki}":
+            return float(self._object_data[2])
+        else:
+            return None
+
     def set_rotation(self, rotation):
         if self.object_type == "{item}":
             itemdata = self._object_data[0]
             for i, val in enumerate(rotation):
                 if val is not None:
-                    print(itemdata)
                     itemdata[1][i] = val
 
         elif self.object_type == "{teki}":
