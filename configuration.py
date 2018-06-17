@@ -27,7 +27,8 @@ def make_default_config():
 
     cfg["gen editor"] = {
         "InvertZoom": "False",
-        "GroundObjectsWhenMoving": "False"
+        "GroundObjectsWhenMoving": "False",
+        "renderStartPos": "False"
     }
 
     with open("piktool.ini", "w") as f:

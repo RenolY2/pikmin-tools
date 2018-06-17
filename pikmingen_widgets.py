@@ -279,22 +279,24 @@ class GenMapViewer(QWidget):
                 p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
 
         if self.pikmin_generators is not None:
-            # Draw spawnpoint
-            x, z, rotation = self.pikmin_generators.startpos_x, self.pikmin_generators.startpos_z, self.pikmin_generators.startdir
-            x, z = (x - midx) * scalex, (z - midz) * scalez
+            if self.editorconfig is not None:
+                if self.editorconfig.getboolean("renderStartPos") is True:
+                    # Draw startPos
+                    x, z, rotation = self.pikmin_generators.startpos_x, self.pikmin_generators.startpos_z, self.pikmin_generators.startdir
+                    x, z = (x - midx) * scalex, (z - midz) * scalez
 
-            pen.setColor(QColor("orange"))
-            pen.setWidth(10)
-            p.setPen(pen)
+                    pen.setColor(QColor("orange"))
+                    pen.setWidth(10)
+                    p.setPen(pen)
 
-            size = ENTITY_SIZE*scalex + 1
-            p.drawRect(x - size // 2, z - size // 2, size, size)
+                    size = ENTITY_SIZE*scalex + 1
+                    p.drawRect(x - size // 2, z - size // 2, size, size)
 
-            pen.setColor(QColor("black"))
-            pen.setWidth(prevwidth)
-            p.setPen(pen)
+                    pen.setColor(QColor("black"))
+                    pen.setWidth(prevwidth)
+                    p.setPen(pen)
 
-            # draw spawnpoint end
+                    # draw startPos end
 
             selected = self.selected
             objects = self.pikmin_generators.objects
@@ -705,7 +707,6 @@ class GenMapViewer(QWidget):
             self.zoom(fac)
 
         #self.mouse_wheel.emit(event)
-
 
 
 class PikminSideWidget(QWidget):
