@@ -53,6 +53,17 @@ def rotate(corner_x, corner_y, center_x, center_y, angle):
 
     return QPoint(int(rotated_x+center_x), int(rotated_y+center_y))
 
+def rotate_rel(corner_x, corner_y, center_x, center_y, angle):
+    temp_x = corner_x-center_x
+    temp_y = corner_y-center_y
+    angle = radians(angle)
+
+    rotated_x = temp_x*cos(angle) - temp_y*sin(angle)
+    rotated_y = temp_x*sin(angle) + temp_y*cos(angle)
+    #print(sin(radians(angle)))
+
+    return rotated_x, rotated_y
+
 #def transform_coords(x,y, offsetx, offsety, scale):
 #    pass
 
