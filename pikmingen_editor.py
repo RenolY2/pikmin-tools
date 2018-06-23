@@ -2,8 +2,6 @@ import traceback
 
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
-
-from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication, QPoint
 from PyQt5.QtCore import Qt
 
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
@@ -104,6 +102,10 @@ class GenEditor(QMainWindow):
         self.pik_control = PikminSideWidget(self)
         self.horizontalLayout.addWidget(self.pik_control)
 
+        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_E, self).activated.connect(self.action_open_editwindow)
+        QtWidgets.QShortcut(Qt.Key_M, self).activated.connect(self.shortcut_move_objects)
+        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_G, self).activated.connect(self.action_ground_objects)
+        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_A, self).activated.connect(self.shortcut_open_add_item_window)
         self.statusbar = QStatusBar(self)
         self.statusbar.setObjectName("statusbar")
         self.setStatusBar(self.statusbar)
@@ -200,6 +202,8 @@ class GenEditor(QMainWindow):
         redo_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence(Qt.CTRL + Qt.Key_Y), self)
         redo_shortcut.activated.connect(self.action_redo)
 
+        self.pikmin_gen_view.rotate_current.connect(self.action_rotate_object)
+
     def action_open_rotationedit_window(self):
         print("wot")
         if self.edit_spawn_window is None:
@@ -253,6 +257,8 @@ class GenEditor(QMainWindow):
                 except Exception as error:
                     print("error", error)
                     traceback.print_exc()
+                else:
+                    self.statusbar.showMessage("Saved to {0}".format(self.current_gen_path))
         else:
             self.button_save_level_as()
 
@@ -273,6 +279,8 @@ class GenEditor(QMainWindow):
                 except Exception as error:
                     print("error", error)
                     traceback.print_exc()
+                else:
+                    self.statusbar.showMessage("Saved to {0}".format(self.current_gen_path))
 
     def button_load_collision(self):
         try:
@@ -287,7 +295,49 @@ class GenEditor(QMainWindow):
             with open(filepath, "r") as f:
                 verts, faces, normals = py_obj.read_obj(f)
 
-            tmprenderwindow = opengltext.TempRenderWindow(verts, faces)
+            width = int(self.configuration["model render"]["Width"])
+            height = int(self.configuration["model render"]["Height"])
+            tmprenderwindow = opengltext.TempRenderWindow(verts, faces, render_res=(width, height))
+            tmprenderwindow.show()
+
+            framebuffer = tmprenderwindow.widget.grabFramebuffer()
+            framebuffer.save("tmp_image.png", "PNG")
+            self.pikmin_gen_view.level_image = framebuffer
+
+            tmprenderwindow.destroy()
+
+            self.pikmin_gen_view.set_collision(verts, faces)
+            self.pathsconfig["collision"] = filepath
+            save_cfg(self.configuration)
+
+        except:
+            traceback.print_exc()
+
+    def button_load_collision_grid(self):
+        try:
+            filepath, choosentype = QFileDialog.getOpenFileName(
+                self, "Open File",
+                self.pathsconfig["collision"],
+                "Archived grid.bin (texts.arc, texts.szs);;Grid.bin (*.bin);;All files (*)")
+
+            if (choosentype == "Archived grid.bin (texts.arc, texts.szs)"
+                    or filepath.endswith(".szs")
+                    or filepath.endswith(".arc")):
+                load_from_arc = True
+            else:
+                load_from_arc = False
+
+            with open(filepath, "rb") as f:
+                if load_from_arc:
+                    archive = Archive.from_file(f)
+                    f = archive["text/grid.bin"]
+                collision = py_obj.PikminCollision(f)
+
+            verts = collision.vertices
+            faces = [face[0] for face in collision.faces]
+            width = int(self.configuration["model render"]["Width"])
+            height = int(self.configuration["model render"]["Height"])
+            tmprenderwindow = opengltext.TempRenderWindow(verts, faces, render_res=(width, height))
             tmprenderwindow.show()
 
             framebuffer = tmprenderwindow.widget.grabFramebuffer()
@@ -327,6 +377,13 @@ class GenEditor(QMainWindow):
             self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
             self.pik_control.button_add_object.setChecked(False)
 
+    def shortcut_open_add_item_window(self):
+        if self.add_object_window is None:
+            self.add_object_window = pikwidgets.AddPikObjectWindow()
+            self.add_object_window.button_savetext.pressed.connect(self.button_add_item_window_save)
+            self.add_object_window.closing.connect(self.button_add_item_window_close)
+            self.add_object_window.show()
+
     @catch_exception
     def button_add_item_window_save(self):
         if self.add_object_window is not None:
@@ -346,7 +403,6 @@ class GenEditor(QMainWindow):
         self.add_object_window = None
         self.pik_control.button_add_object.setChecked(False)
         self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
-        print("okdone")
 
     @catch_exception
     def action_add_object(self, x, z):
@@ -364,8 +420,23 @@ class GenEditor(QMainWindow):
     def button_move_objects(self):
         if self.pikmin_gen_view.mousemode == pikwidgets.MOUSE_MODE_MOVEWP:
             self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
+            #self.pik_control.button_move_object.setChecked(False)
+
         else:
             self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_MOVEWP)
+            self.pik_control.button_add_object.setChecked(False)
+            #self.pik_control.button_move_object.setChecked(True)
+
+    def shortcut_move_objects(self):
+        if self.pikmin_gen_view.mousemode == pikwidgets.MOUSE_MODE_MOVEWP:
+            self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
+            self.pik_control.button_move_object.setChecked(False)
+
+        else:
+            self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_MOVEWP)
+            self.pik_control.button_add_object.setChecked(False)
+            self.pik_control.button_move_object.setChecked(True)
+
 
     @catch_exception
     def action_move_objects(self, deltax, deltaz):
@@ -377,7 +448,7 @@ class GenEditor(QMainWindow):
             obj.offset_x = 0
             obj.offset_z = 0
 
-            if self.editorconfig["GroundObjectsWhenMoving"] is True:
+            if self.editorconfig.getboolean("GroundObjectsWhenMoving") is True:
                 if self.pikmin_gen_view.collision is not None:
                     y = self.pikmin_gen_view.collision.collide_ray_downwards(obj.x, obj.z)
                     obj.y = obj.position_y = y
@@ -386,6 +457,24 @@ class GenEditor(QMainWindow):
         if len(self.pikmin_gen_view.selected) == 1:
             obj = self.pikmin_gen_view.selected[0]
             self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
+
+        self.pikmin_gen_view.update()
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent):
+        if event.key() == Qt.Key_Shift:
+            self.pikmin_gen_view.shift_is_pressed = True
+        elif event.key() == Qt.Key_R:
+            self.pikmin_gen_view.rotation_is_pressed = True
+
+    def keyReleaseEvent(self, event: QtGui.QKeyEvent):
+        if event.key() == Qt.Key_Shift:
+            self.pikmin_gen_view.shift_is_pressed = False
+        elif event.key() == Qt.Key_R:
+            self.pikmin_gen_view.rotation_is_pressed = False
+
+    def action_rotate_object(self, obj, angle):
+        obj.set_rotation((None, angle, None))
+        self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
 
         self.pikmin_gen_view.update()
 
@@ -407,6 +496,10 @@ class GenEditor(QMainWindow):
         tobedeleted = []
         for obj in self.pikmin_gen_view.selected:
             self.pikmin_gen_file.objects.remove(obj)
+            if obj in self.editing_windows:
+                self.editing_windows[obj].destroy()
+                del self.editing_windows[obj]
+
             tobedeleted.append(obj)
         self.pikmin_gen_view.selected = []
 
@@ -424,6 +517,10 @@ class GenEditor(QMainWindow):
         if action == "AddObject":
             obj = val
             self.pikmin_gen_file.objects.remove(obj)
+            if obj in self.editing_windows:
+                self.editing_windows[obj].destroy()
+                del self.editing_windows[obj]
+
             if len(self.pikmin_gen_view.selected) == 1 and self.pikmin_gen_view.selected[0] is obj:
                 self.pik_control.reset_info()
             if obj in self.pikmin_gen_view.selected:
@@ -454,6 +551,10 @@ class GenEditor(QMainWindow):
         if action == "RemoveObjects":
             for obj in val:
                 self.pikmin_gen_file.objects.remove(obj)
+                if obj in self.editing_windows:
+                    self.editing_windows[obj].destroy()
+                    del self.editing_windows[obj]
+
                 if len(self.pikmin_gen_view.selected) == 1 and self.pikmin_gen_view.selected[0] is obj:
                     self.pik_control.reset_info()
                 if obj in self.pikmin_gen_view.selected:
@@ -461,50 +562,14 @@ class GenEditor(QMainWindow):
 
             self.pikmin_gen_view.update()
 
-    def button_load_collision_grid(self):
-        try:
-            filepath, choosentype = QFileDialog.getOpenFileName(
-                self, "Open File",
-                self.pathsconfig["collision"],
-                "Archived grid.bin (texts.arc, texts.szs);;Grid.bin (*.bin);;All files (*)")
-
-            if (choosentype == "Archived grid.bin (texts.arc, texts.szs)"
-                    or filepath.endswith(".szs")
-                    or filepath.endswith(".arc")):
-                load_from_arc = True
-            else:
-                load_from_arc = False
-
-            with open(filepath, "rb") as f:
-                if load_from_arc:
-                    archive = Archive.from_file(f)
-                    f = archive["text/grid.bin"]
-                collision = py_obj.PikminCollision(f)
-
-            verts = collision.vertices
-            faces = [face[0] for face in collision.faces]
-
-            tmprenderwindow = opengltext.TempRenderWindow(verts, faces)
-            tmprenderwindow.show()
-
-            framebuffer = tmprenderwindow.widget.grabFramebuffer()
-            framebuffer.save("tmp_image.png", "PNG")
-            self.pikmin_gen_view.level_image = framebuffer
-
-            tmprenderwindow.destroy()
-
-            self.pikmin_gen_view.set_collision(verts, faces)
-            self.pathsconfig["collision"] = filepath
-            save_cfg(self.configuration)
-
-        except:
-            traceback.print_exc()
-
     def create_field_edit_action(self, fieldname):
         attribute = "lineedit_"+fieldname
 
         @catch_exception
         def change_field(text):
+            if text == "":
+                return
+
             try:
                 #val = float(getattr(self.pik_control, attribute).text())
                 val = float(text)
@@ -525,7 +590,6 @@ class GenEditor(QMainWindow):
                             if coord == "x": pikobject.set_rotation((val, None, None))
                             elif coord == "y": pikobject.set_rotation((None, val, None))
                             elif coord == "z": pikobject.set_rotation((None, None, val))
-                            print("rotation set")
                         elif pikobject.object_type == "{teki}":
                             pikobject.set_rotation((None, val, None))
                     self.pikmin_gen_view.update()
@@ -557,7 +621,6 @@ class GenEditor(QMainWindow):
                             self.pikmin_gen_view.update()
 
                     def action_close_edit_window():
-                        print("closing")
                         self.editing_windows[currentobj].destroy()
                         del self.editing_windows[currentobj]
 
@@ -567,6 +630,7 @@ class GenEditor(QMainWindow):
 
                 else:
                     self.editing_windows[currentobj].activateWindow()
+
     @catch_exception
     def action_update_info(self, event):
         if self.pikmin_gen_file is not None:
@@ -650,6 +714,10 @@ class EditorHistory(object):
         item = self.history[self.step]
         self.step += 1
         return item
+
+
+
+
 
 
 

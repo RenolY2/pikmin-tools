@@ -1,13 +1,8 @@
 import traceback
 import os
-import xml.etree.ElementTree as etree
-from time import sleep
-from array import array
 from timeit import default_timer
 from io import StringIO
-from copy import copy
 from math import sin, cos, atan2, radians, degrees
-from itertools import chain
 
 from PyQt5.QtGui import QMouseEvent, QWheelEvent, QPainter, QColor, QFont, QFontMetrics, QPolygon, QImage, QPixmap, QKeySequence
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMenu, QLineEdit,
@@ -15,6 +10,7 @@ from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMe
 import PyQt5.QtWidgets as QtWidgets
 from PyQt5.QtCore import QSize, pyqtSignal, QPoint, QRect
 from PyQt5.QtCore import Qt
+import PyQt5.QtGui as QtGui
 
 from helper_functions import calc_zoom_in_factor, calc_zoom_out_factor
 
@@ -40,12 +36,28 @@ MOUSE_MODE_MOVEWP = 1
 MOUSE_MODE_ADDWP = 2
 MOUSE_MODE_CONNECTWP = 3
 
+BRIDGE_LENGTHS = {pikmingen.BRIDGE_LONG: 360,
+                   pikmingen.BRIDGE_SHORT_UP: 120,
+                   pikmingen.BRIDGE_SHORT: 180}
+
+BRIDGE_GRAPHICS = {pikmingen.BRIDGE_SHORT: QtGui.QImage("resources/sbridge.png", "png"),
+                   pikmingen.BRIDGE_SHORT_UP: QtGui.QImage("resources/ubridge.png", "png"),
+                   pikmingen.BRIDGE_LONG: QtGui.QImage("resources/lbridge.png", "png")}
+
+GATE_GRAPHICS = {pikmingen.GATE_SAND: QtGui.QImage("resources/gate.png", "png"),
+                 pikmingen.GATE_ELECTRIC: QtGui.QImage("resources/dgat.png", "png")}
 
 ONION_COLORTABLE = {pikmingen.ONYN_ROCKET: QColor("grey"),
                     pikmingen.ONYN_BLUEONION: QColor("blue"),
                     pikmingen.ONYN_REDONION: QColor(255, 55, 55),
                     pikmingen.ONYN_YELLOWONION: QColor(255, 212, 0)}
 
+OBJECT_SIZES = {
+    pikmingen.ONYN_BLUEONION: 47,
+    pikmingen.ONYN_REDONION: 47,
+    pikmingen.ONYN_YELLOWONION: 47,
+    pikmingen.ONYN_ROCKET: 55,
+}
 
 class GenMapViewer(QWidget):
     mouse_clicked = pyqtSignal(QMouseEvent)
@@ -59,6 +71,8 @@ class GenMapViewer(QWidget):
     connect_update = pyqtSignal(int, int)
     create_waypoint = pyqtSignal(float, float)
     ENTITY_SIZE = ENTITY_SIZE
+
+    rotate_current = pyqtSignal(pikmingen.PikminObject, float)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -127,6 +141,9 @@ class GenMapViewer(QWidget):
 
         self.spawnpoint = None
 
+        self.shift_is_pressed = False
+        self.rotation_is_pressed = False
+
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
 
@@ -138,7 +155,7 @@ class GenMapViewer(QWidget):
 
     def reset(self, keep_collision=False):
         self.overlapping_wp_index = 0
-
+        self.shift_is_pressed = False
         self.SIZEX = 1024
         self.SIZEY = 1024
         self.origin_x = self.SIZEX//2
@@ -167,6 +184,7 @@ class GenMapViewer(QWidget):
 
         self.mousemode = MOUSE_MODE_NONE
         self.spawnpoint = None
+        self.rotation_is_pressed = False
 
     def set_collision(self, verts, faces):
         self.collision = Collision(verts, faces)
@@ -303,6 +321,45 @@ class GenMapViewer(QWidget):
             #links = self.pikmin_routes.links
             #for waypoint, wp_info in self.waypoints.items():
             for pikminobject in objects:
+                x, y, z = pikminobject.x, pikminobject.y, pikminobject.z
+                x, z = (x - midx) * scalex, (z - midz) * scalez
+
+                name = pikminobject.get_useful_object_name()
+
+                if pikminobject.object_type == "{item}":
+                    if name in BRIDGE_LENGTHS:
+                        p.save()
+                        length = BRIDGE_LENGTHS[name]*scalex
+                        angle = pikminobject.get_horizontal_rotation()
+                        p.translate(x, z)
+                        p.rotate(-angle)
+                        width = 130*scalex
+                        #p.drawRect(x-width//2, z, width, length)
+                        p.drawImage(QRect(0 - width // 2, 0 - (42)*scalex, width, 38*scalex + length),
+                                    BRIDGE_GRAPHICS[name])
+                        #p.drawRect(0 - width // 2, 0, width, length)
+
+                        p.restore()
+                    elif name in GATE_GRAPHICS:
+                        p.save()
+                        angle = pikminobject.get_horizontal_rotation()
+                        p.translate(x, z)
+                        p.rotate(-angle)
+
+                        length = 267*scalex
+
+                        if name == pikmingen.GATE_ELECTRIC:
+                            width = 35*scalez
+                            p.drawImage(QRect(0 - length // 2, 0 - width//2-10*scalex, length, width),
+                                        GATE_GRAPHICS[name])
+                        else:
+                            width = 70*scalez
+                            p.drawImage(QRect(0 - length // 2, 0 - width // 2, length, width),
+                                        GATE_GRAPHICS[name])
+                        p.restore()
+
+
+            for pikminobject in objects:
                 x,y,z = pikminobject.x, pikminobject.y, pikminobject.z
 
                 color = DEFAULT_ENTITY
@@ -315,6 +372,13 @@ class GenMapViewer(QWidget):
                     if name in ONION_COLORTABLE:
                         color = ONION_COLORTABLE[name]
                         drawcircle = True
+
+                    if name in OBJECT_SIZES:
+                        size = OBJECT_SIZES[name] * scalex
+                    else:
+                        size = ENTITY_SIZE * scalex
+                else:
+                    size = ENTITY_SIZE * scalex
 
                 if pikminobject in selected:
                     # print("vhanged")
@@ -339,8 +403,6 @@ class GenMapViewer(QWidget):
                         relx, relz = rotate_rel(pointx, pointz, x, z, angle)
                         p.drawLine(x, z, x-relx, z+relz)
 
-                size = ENTITY_SIZE*scalex
-
                 if drawcircle:
                     if not isselected:
                         p.setBrush(DEFAULT_ENTITY)
@@ -349,7 +411,6 @@ class GenMapViewer(QWidget):
                         p.setBrush(color)
                         p.setPen(color)
 
-
                     p.drawEllipse(x-(size//2)-2, z-(size//2)-2, size+4, size+4)
 
                     p.setBrush(color)
@@ -357,7 +418,8 @@ class GenMapViewer(QWidget):
 
                     p.drawEllipse(x - size // 2, z - size // 2, size, size)
                 else:
-                    p.drawRect(x-size//2, z-size//2, size, size)
+                    #p.drawRect(x-size//2, z-size//2, size, size)
+                    p.drawEllipse(x - size // 2, z - size // 2, size, size)
 
             arrows = []
             pen = p.pen()
@@ -446,7 +508,7 @@ class GenMapViewer(QWidget):
             selectstartx = mouse_x/scalex + midx
             selectstartz = mouse_z/scalez + midz
 
-            if (self.mousemode == MOUSE_MODE_MOVEWP or self.mousemode == MOUSE_MODE_NONE):
+            if True: #(self.mousemode == MOUSE_MODE_MOVEWP or self.mousemode == MOUSE_MODE_NONE):
                 self.left_button_down = True
                 self.selectionbox_start = (selectstartx, selectstartz)
 
@@ -461,13 +523,28 @@ class GenMapViewer(QWidget):
                     #if ((x-way_x)**2 + (z-way_z)**2)**0.5 < radius_actual:
                     #    all_hit_waypoints.append(wp_index)
                     # print(abs(x-objx), abs(z-objz))
-                    if abs(mouse_x-objx) <= ENTITY_SIZE and abs(mouse_z - objz) <= ENTITY_SIZE:
+                    name = pikminobject.get_useful_object_name()
+
+                    if name in OBJECT_SIZES:
+                        size = OBJECT_SIZES[name]
+                    else:
+                        size = ENTITY_SIZE
+
+                    #if abs(mouse_x-objx) <= size and abs(mouse_z - objz) <= size:
+                    if abs(selectstartx-pikminobject.x) <= size//2 and abs(selectstartz-pikminobject.z) <= size//2:
                         # print("hit!")
                         all_hit_waypoints.append(pikminobject)
 
                 if len(all_hit_waypoints) > 0:
                     wp_index = all_hit_waypoints[self.overlapping_wp_index%len(all_hit_waypoints)]
-                    self.selected = [wp_index]
+                    if not self.shift_is_pressed:
+                        self.selected = [wp_index]
+                    else:
+                        if wp_index not in self.selected:
+                            self.selected.append(wp_index)
+                        else:
+                            self.selected.remove(wp_index)
+
                     # print("hit")
                     hit = True
                     self.select_update.emit(event)
@@ -479,16 +556,13 @@ class GenMapViewer(QWidget):
                     self.update()
                     self.overlapping_wp_index = (self.overlapping_wp_index+1)%len(all_hit_waypoints)
 
-
                 if not hit:
-                    self.selected = []
+                    if not self.shift_is_pressed:
+                        self.selected = []
                     self.select_update.emit(event)
                     self.connect_first_wp = None
                     self.move_startpos = []
                     self.update()
-
-
-
 
         if event.buttons() & Qt.MiddleButton and not self.mid_button_down:
             self.mid_button_down = True
@@ -502,19 +576,26 @@ class GenMapViewer(QWidget):
                 movetox = mouse_x/scalex + midx
                 movetoz = mouse_z/scalez + midz
 
-                if len(self.selected) > 0:
-                    sumx, sumz = 0, 0
-                    wpcount = len(self.selected)
-                    for obj in self.move_startpos:
-                        sumx += obj.x
-                        sumz += obj.z
+                if self.rotation_is_pressed and len(self.selected) == 1:
+                    obj = self.selected[0]
+                    relx = obj.x - movetox
+                    relz = obj.z - movetoz
 
-                    x = sumx/float(wpcount)
-                    z = sumz/float(wpcount)
+                    self.rotate_current.emit(obj, degrees(atan2(-relx, -relz)))
 
-                    self.move_points.emit(movetox-x, movetoz-z)
+                elif not self.rotation_is_pressed:
+                    if len(self.selected) > 0:
+                        sumx, sumz = 0, 0
+                        wpcount = len(self.selected)
+                        for obj in self.selected:
+                            sumx += obj.x
+                            sumz += obj.z
 
-                    #self.move_startpos = (movetox, movetoz)
+                        x = sumx/float(wpcount)
+                        z = sumz/float(wpcount)
+
+                        self.move_points.emit(movetox-x, movetoz-z)
+
             elif self.mousemode == MOUSE_MODE_ADDWP:
                 mouse_x, mouse_z = (event.x(), event.y())
                 destx = mouse_x/scalex + midx
@@ -621,7 +702,13 @@ class GenMapViewer(QWidget):
                 count = float(len(selected))
                 self.move_startpos = selected
 
-            self.selected = selected
+            if not self.shift_is_pressed:
+                self.selected = selected
+            else:
+                for val in selected:
+                    if val not in self.selected:
+                        self.selected.append(val)
+
             self.select_update.emit(event)
             self.update()
 
@@ -631,18 +718,27 @@ class GenMapViewer(QWidget):
                 movetox = mouse_x/scalex + midx
                 movetoz = mouse_z/scalez + midz
 
-                if len(self.selected) > 0:
-                    sumx, sumz = 0, 0
-                    objcount = len(self.selected)
-                    objects = self.pikmin_generators.objects
-                    for object in self.selected:
-                        sumx += object.x
-                        sumz += object.z
+                if self.rotation_is_pressed and len(self.selected) == 1:
+                    obj = self.selected[0]
+                    relx = obj.x - movetox
+                    relz = obj.z - movetoz
 
-                    x = sumx/float(objcount)
-                    z = sumz/float(objcount)
+                    self.rotate_current.emit(obj, degrees(atan2(-relx, -relz)))
 
-                    self.move_points.emit(movetox-x, movetoz-z)
+                elif not self.rotation_is_pressed:
+                    if len(self.selected) > 0:
+                        sumx, sumz = 0, 0
+                        objcount = len(self.selected)
+                        objects = self.pikmin_generators.objects
+                        for object in self.selected:
+                            sumx += object.x
+                            sumz += object.z
+
+                        x = sumx/float(objcount)
+                        z = sumz/float(objcount)
+
+                        self.move_points.emit(movetox-x, movetoz-z)
+
 
         if True:  # self.highlighttriangle is not None:
             mouse_x, mouse_z = (event.x(), event.y())
@@ -719,10 +815,10 @@ class PikminSideWidget(QWidget):
 
         self.verticalLayout.setObjectName("verticalLayout")
 
-        self.button_add_object = CheckableButton(parent)
+        self.button_add_object = QPushButton(parent)
         self.button_remove_object = QPushButton(parent)
         self.button_ground_object = QPushButton(parent)
-        self.button_move_object = CheckableButton(parent)
+        self.button_move_object = QPushButton(parent)
         self.button_edit_object = QPushButton(parent)
 
         self.button_add_object.setText("Add Object")
@@ -750,20 +846,49 @@ class PikminSideWidget(QWidget):
         self.verticalLayout.addStretch(30)
 
         self.name_label = QLabel(parent)
+        self.identifier_label = QLabel(parent)
+        self.identifier_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.verticalLayout.addWidget(self.name_label)
+        self.verticalLayout.addWidget(self.identifier_label)
+
         self.verticalLayout.addWidget(self.lineedit_coordinatex)
         self.verticalLayout.addWidget(self.lineedit_coordinatey)
         self.verticalLayout.addWidget(self.lineedit_coordinatez)
+
+        self.verticalLayout.addLayout(self._make_labeled_lineedit(self.lineedit_coordinatex, "X:   "))
+        self.verticalLayout.addLayout(self._make_labeled_lineedit(self.lineedit_coordinatey, "Y:   "))
+        self.verticalLayout.addLayout(self._make_labeled_lineedit(self.lineedit_coordinatez, "Z:   "))
         self.verticalLayout.addStretch(10)
-        self.verticalLayout.addWidget(self.lineedit_rotationx)
-        self.verticalLayout.addWidget(self.lineedit_rotationy)
-        self.verticalLayout.addWidget(self.lineedit_rotationz)
+        self.verticalLayout.addLayout(self._make_labeled_lineedit(self.lineedit_rotationx, "RotX:"))
+        self.verticalLayout.addLayout(self._make_labeled_lineedit(self.lineedit_rotationy, "RotY:"))
+        self.verticalLayout.addLayout(self._make_labeled_lineedit(self.lineedit_rotationz, "RotZ:"))
+        self.verticalLayout.addStretch(10)
+        self.comment_label = QLabel(parent)
+        self.comment_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.comment_label.setWordWrap(True)
+        self.verticalLayout.addWidget(self.comment_label)
         self.verticalLayout.addStretch(500)
 
         self.reset_info()
 
+    def _make_labeled_lineedit(self, lineedit, label):
+        font = QFont()
+        font.setFamily("Consolas")
+        font.setStyleHint(QFont.Monospace)
+        font.setFixedPitch(True)
+        font.setPointSize(10)
+
+        layout = QHBoxLayout(self)
+        label = QLabel(label, self)
+        label.setFont(font)
+        layout.addWidget(label)
+        layout.addWidget(lineedit)
+        return layout
+
     def reset_info(self, info="None selected"):
         self.name_label.setText(info)
+        self.identifier_label.setText("")
+        self.comment_label.setText("")
 
         self.lineedit_coordinatex.setText("")
         self.lineedit_coordinatey.setText("")
@@ -783,6 +908,12 @@ class PikminSideWidget(QWidget):
 
     def set_info(self, obj, position, rotation=None):
         self.name_label.setText("Selected: {}".format(obj.get_useful_object_name()))
+        self.identifier_label.setText(obj.get_identifier())
+
+        comment = "Object notes:\n"
+        for part in obj.preceeding_comment:
+            comment += part.strip() + "\n"
+        self.comment_label.setText(comment)
 
         self.lineedit_coordinatex.setDisabled(False)
         self.lineedit_coordinatey.setDisabled(False)
@@ -869,6 +1000,24 @@ class PikObjectEditor(QMdiSubWindow):
         self.verticalLayout.addWidget(self.button_savetext)
         self.setWindowTitle(self.windowname)
 
+        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self).activated.connect(self.emit_save_object)
+        #self.bla = QtWidgets.QShortcut(Qt.CTRL + Qt.Key_W, self)
+        #self.bla.activated.connect(self.shortcut_closewindow)
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent):
+        if event.key() == Qt.CTRL + Qt.Key_W:
+            self.shortcut_closewindow()
+        else:
+            super().keyPressEvent(event)
+
+    def emit_save_object(self):
+        self.button_savetext.pressed.emit()
+
+    @catch_exception
+    def shortcut_closewindow(self):
+        print("Halleluja")
+        self.close()
+
     def closeEvent(self, event):
         self.closing.emit()
 
@@ -909,6 +1058,7 @@ class PikObjectEditor(QMdiSubWindow):
             content = self.textbox_xml.toPlainText()
             obj = PikminObject()
             obj.from_text(content)
+            obj.get_rotation()
             return obj
         except:
             traceback.print_exc()
@@ -970,6 +1120,11 @@ class AddPikObjectWindow(PikObjectEditor):
         self.verticalLayout.addWidget(self.textbox_xml)
         self.verticalLayout.addWidget(self.button_savetext)
         self.setWindowTitle(self.windowname)
+
+        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self).activated.connect(self.emit_add_object)
+
+    def emit_add_object(self):
+        self.button_savetext.pressed.emit()
 
     def setup_dropdown_menu(self):
         self.template_menu = QtWidgets.QComboBox(self)
