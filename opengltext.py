@@ -41,7 +41,7 @@ for coltrans in [
     ((249, 239, 160), (214, 127, 70), 3), # Even higher, yellow to brown
     ((214, 127, 70), (150, 93, 60), 4), # brown to dark brown #(119, 68, 39)
     ((150, 93, 60), (130,130, 130), 4), # dark brown to grey, very high
-    (((130,130, 130), (255, 255, 255), 4))]: # grey to white, very very high
+    (((130,130, 130), (250, 250, 250), 4))]: # grey to white, very very high
 
     start, end, repeat = coltrans
     for i, color in enumerate(make_gradient(start, end, step=8)):
@@ -53,7 +53,11 @@ DO_GRAYSCALE = False
 
 class GLPlotWidget(QtWidgets.QOpenGLWidget):
     # default window size
-    width, height = 1000, 1000
+    width, height = 2000, 2000
+
+    def set_size(self, width, height):
+        self.width = width
+        self.height = height
 
     def set_data(self, verts, faces):
         #Load 2D data as a Nx2 Numpy array.
@@ -134,10 +138,8 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
                 index = int((average_y/scaleheight)*len(COLORS))
                 if index < 0:
                     index = 0
-                    print("woops")
                 if index >= len(COLORS):
                     index = len(COLORS)-1
-                    print("woops")
                 r, g, b = COLORS[index]
                 glColor3f(r/256.0,g/256.0,b/256.0)
                 glVertex3f(v1x, -v1z, v1y)
@@ -171,7 +173,7 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
         self.width, self.height = width, height
         # paint within the whole window
         glEnable( GL_DEPTH_TEST )
-        glViewport(0, 0, 1000, 1000)
+        glViewport(0, 0, self.width, self.width)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         glOrtho(-6000.0, 6000.0, -6000.0, 6000.0, -3000.0, 2000.0)
@@ -182,12 +184,13 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
 
 # define a Qt window with an OpenGL widget inside it
 class TempRenderWindow(QtWidgets.QMainWindow):
-    def __init__(self, verts, faces):
+    def __init__(self, verts, faces, render_res):
         super(TempRenderWindow, self).__init__()
         # generate random data points
         # self.data = np.array(.2*rdn.randn(100000,2),dtype=np.float32)
         # initialize the GL widget
         self.widget = GLPlotWidget()
+        self.widget.set_size(*render_res)
         self.widget.set_data(verts, faces)
         # put the window at the screen position (100, 100)
         self.setGeometry(100, 100, self.widget.width, self.widget.height)
