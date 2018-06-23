@@ -97,8 +97,8 @@ class MapViewer(QWidget):
         self.SIZEY = 1024#768#1024
 
 
-        self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
-        self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
+        #self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
+        #self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
         self.setObjectName("bw_map_screen")
 
 
@@ -192,8 +192,8 @@ class MapViewer(QWidget):
 
         self.selected_waypoints = []
 
-        self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
-        self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
+        #self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
+        #self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
 
         self.level_image = None
         #del self.collision
@@ -249,7 +249,7 @@ class MapViewer(QWidget):
         h = self.height()
         w = self.width()
         p.setBrush(QColor("white"))
-        p.drawRect(0, 0, h-1, w-1)
+        p.drawRect(0, 0, w-1, h-1)
 
         zf = self.zoom_factor
         current_entity = self.current_waypoint
@@ -275,6 +275,9 @@ class MapViewer(QWidget):
 
         drawendx = drawstartx + w + (zf-1.0)*(w//2)
         drawendz = drawstartz + h + (zf-1.0)*(h//2)
+
+        drawendxView = drawstartx + w + (zf - 1.0) * (w)
+        drawendzView = drawstartz + h + (zf - 1.0) * (h)
 
         viewportwidth = drawendx-drawstartx
         viewportheight = drawendz-drawstartz
@@ -316,19 +319,21 @@ class MapViewer(QWidget):
 
         pen.setWidth(prevwidth)
         p.setPen(pen)
+        step = 500
 
-        for x in range(-6000, 6000+1, 500):
+        loop_startx = int(drawstartx-drawstartx%step)
+        loop_endx = int((drawendxView+step) - (drawendxView+step) % step)
+        for x in range(loop_startx, loop_endx + 4*500, 500):
             x = (x-midx)*scalex
-            if 0 <= x <= w:
-                p.drawLine(QPoint(x,-5000), QPoint(x,+5000))
+            if 0 <= x <= w or True:
+                p.drawLine(QPoint(x, -5000), QPoint(x, +5000))
 
-        for z in range(-6000, 6000+1, 500):
-
+        loop_startz = int(drawstartz - drawstartz % step)
+        loop_endz = int((drawendzView + step) - (drawendzView + step) % step)
+        for z in range(loop_startz, loop_endz + 2*500, 500):
             z = (z-midz)*scalez
-            if 0 <= z <= h:
+            if 0 <= z <= h or True:
                 p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
-
-
 
         if self.pikmin_routes is not None:
             selected = self.selected_waypoints
@@ -874,7 +879,6 @@ def subdivide_grid(minx, minz,
         v2 = vertices[v2_index[0]-1]
         v3 = vertices[v3_index[0]-1]
 
-
         for quadrant, startx, endx, startz, endz in coordinates:
             if quadrant not in skip:
                 area_size_x = (endx - startx)*cell_size
@@ -888,7 +892,6 @@ def subdivide_grid(minx, minz,
                     #print(i, "collided")
                     quadrants[quadrant].append((i, face))
 
-
     for quadrant, startx, endx, startz, endz in coordinates:
         #print("Doing subdivision, skipping:", skip)
         if quadrant not in skip:
@@ -897,12 +900,15 @@ def subdivide_grid(minx, minz,
                            startx, endx, startz, endz,
                            cell_size, quadrants[quadrant], vertices, result)
 
+
 def normalize_vector(v1):
     n = (v1[0]**2 + v1[1]**2 + v1[2]**2)**0.5
     return v1[0]/n, v1[1]/n, v1[2]/n
 
+
 def create_vector(v1, v2):
     return v2[0]-v1[0],v2[1]-v1[1],v2[2]-v1[2]
+
 
 def cross_product(v1, v2):
     cross_x = v1[1]*v2[2] - v1[2]*v2[1]
@@ -943,6 +949,9 @@ class Collision(object):
     def collide_ray_downwards(self, x, z, y=99999):
         grid_x = int((x+6000) // 100)
         grid_z = int((z+6000) // 100)
+
+        if grid_x not in self.grid or grid_z not in self.grid[grid_x]:
+            return None
 
         triangles = self.grid[grid_x][grid_z]
 
