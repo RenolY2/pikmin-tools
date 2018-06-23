@@ -30,6 +30,10 @@ def make_default_config():
         "GroundObjectsWhenMoving": "False",
         "renderStartPos": "False"
     }
+    cfg["model render"] = {
+        "Width": "1000",
+        "Height": "1000"
+    }
 
     with open("piktool.ini", "w") as f:
         cfg.write(f)
