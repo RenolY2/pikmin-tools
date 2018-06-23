@@ -279,6 +279,13 @@ class PikminGenFile(PikminTxt):
                 pikminobject.from_textnode(generator)
                 self.objects.append(pikminobject)
 
+        f.seek(0)
+        allcomments = gen_readcomments(f)
+        assert len(allcomments) == len(self.objects)
+        for i, val in enumerate(allcomments):
+            if val is not None:
+                self.objects[i].set_preceeding_comment(val)
+
     def write(self, f, *args, **kwargs):
         del self._root
         self._root = TextRoot()
@@ -294,6 +301,29 @@ class PikminGenFile(PikminTxt):
 
         super().write(f, *args, **kwargs)
 
+
+def gen_readcomments(f):
+    current_comment = []
+    comments = []
+    start = False
+    addcomments = True
+
+    for line in f:
+        if not start and line.startswith("{"):
+            start = True
+        elif start:
+            if line.startswith("#") and addcomments:
+                current_comment.append(line.strip())
+
+            if line.startswith("{") and "}" not in line:
+                comments.append(current_comment)
+                current_comment = []
+                addcomments = False
+
+            if line.startswith("}"):
+                addcomments = True
+
+    return comments
 
 if __name__ == "__main__":
     import os

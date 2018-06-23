@@ -1,7 +1,8 @@
 import libpiktxt
+from copy import deepcopy
 from struct import pack
 from itertools import chain
-
+from io import StringIO
 
 class TextRoot(list):
     pass
@@ -10,10 +11,22 @@ class TextRoot(list):
 class TextNode(list):
     pass
 
+
 ONYN_ROCKET = "Rocket"
 ONYN_REDONION = "Red Onion"
 ONYN_YELLOWONION = "Yellow Onion"
 ONYN_BLUEONION = "Blue Onion"
+
+BRIDGE_SHORT = "Short Bridge"
+BRIDGE_SHORT_UP = "Short Bridge (Upwards)"
+BRIDGE_LONG = "Long Bridge"
+BRIDGES = {"0": BRIDGE_SHORT,
+           "1": BRIDGE_SHORT_UP,
+           "2": BRIDGE_LONG}
+
+GATE_SAND = "Gate"
+GATE_ELECTRIC = "Electric Gate"
+
 
 class PikminObject(object):
     def __init__(self):
@@ -30,11 +43,27 @@ class PikminObject(object):
         self.identifier = None
         self.identifier_misc = None
         self._object_data = TextNode()
+        self.preceeding_comment = []
 
     def from_text(self, text):
         node = libpiktxt.PikminTxt()
         node.from_text(text)
-        self.from_textnode(node._root)
+
+        if len(node._root) == 1:
+            self.from_textnode(node._root[0])
+        else:
+            self.from_textnode(node._root)
+
+        f = StringIO(text)
+
+        comments = []
+        for line in f:
+            if line.startswith("#"):
+                comments.append(line)
+            elif line[0] != "#":
+                break
+
+        self.set_preceeding_comment(comments)
 
     def from_textnode(self, textnode):
         self.version = textnode[0]  # Always v0.3?
@@ -78,11 +107,12 @@ class PikminObject(object):
         self.identifier_misc = other_pikminobj.identifier_misc
 
         self._object_data = other_pikminobj._object_data
+        self.set_preceeding_comment(other_pikminobj.preceeding_comment)
 
     def copy(self):
-        newobj = PikminObject()
-        newobj.from_pikmin_object(self)
-        return newobj
+        #newobj = PikminObject()
+        #newobj.from_pikmin_object(self)
+        return deepcopy(self)#newobj
 
     def get_rotation(self):
         if self.object_type == "{item}":
@@ -111,6 +141,17 @@ class PikminObject(object):
                 elif oniontype == "0":
                     return ONYN_BLUEONION
 
+            elif subtype == "{brdg}":
+                bridgetype = itemdata[3]
+                if bridgetype in BRIDGES:
+                    return BRIDGES[bridgetype]
+                else:
+                    return "<invalid bridge type>"
+            elif subtype == "{gate}":
+                return GATE_SAND
+            elif subtype == "{dgat}":
+                return GATE_ELECTRIC
+
             return self.object_type+subtype
         else:
             return self.object_type
@@ -133,19 +174,31 @@ class PikminObject(object):
         elif self.object_type == "{teki}":
             self._object_data[2] = rotation[1]
 
+    def set_preceeding_comment(self, comments):
+        self.preceeding_comment = comments
+
+    def get_identifier(self):
+        try:
+            name = pack(32 * "B", *self.arguments).strip(b"\x00")
+            name = name.decode("shift-jis")
+        except:
+            name = "<failed to decode identifier>"
+
+        return name
+
     def to_textnode(self):
         textnode = TextNode()
+
+        for comment in self.preceeding_comment:
+            assert comment.startswith("#")
+            textnode.append([comment.strip()])
 
         textnode.append([self.version, "# Version"])
         textnode.append([self.reserved, "# Reserved"])
         textnode.append([self.days_till_resurrection, "# Days till resurrection"])
 
-        name = pack(32*"B", *self.arguments).strip(b"\x00")
 
-        try:
-            name = name.decode("shift-jis")
-        except:
-            name = "<failed to decode identifier>"
+        name = self.get_identifier()
 
         textnode.append(list(chain(self.arguments, ["# {0}".format(name)])))
 
