@@ -71,7 +71,8 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
     def initializeGL(self):
         #Initialize OpenGL, VBOs, upload data on the GPU, etc.
         # background color
-        glClearColor(255,255,255,0)
+        #glClearColor(1.0, 1.0, 1.0, 0.0)
+        pass
         # create a Vertex Buffer Object with the specified data
         #self.vbo = glvbo.VBO(self.data)
 
@@ -80,6 +81,7 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
         #Paint the scene.
         # clear the buffer
         #gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+        glClearColor(1.0, 1.0, 1.0, 0.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) # clear the screen
         glDisable(GL_CULL_FACE)
         # set yellow color for subsequent drawing rendering calls
