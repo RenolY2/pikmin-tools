@@ -4,10 +4,11 @@ from io import StringIO
 from pikmingen import PikminObject, TextRoot, TextNode
 
 
-def parse_structure(f, depth=0):
+def parse_structure(f, depth=0, brackets=0):
     data = TextNode()
-
+    started = False
     for line in f:
+
         # line = line.strip()
         for i, character in enumerate(line):
             if character == "#":
@@ -16,9 +17,11 @@ def parse_structure(f, depth=0):
         line = line.strip()
 
         if line == "{":
-            nested_data = TextNode(parse_structure(f, depth+1))
+            started = True
+            nested_data, brackets = TextNode(parse_structure(f, depth+1, brackets+1))
             data.append(nested_data)
         elif line == "}":
+            brackets -= 1
             break
         elif line != "":
             values = line.split(" ")
@@ -38,9 +41,10 @@ def parse_structure(f, depth=0):
                 data.append(values)
 
             if break_on_same_line:
+                brackets -= 1
                 break
 
-    return data
+    return data, brackets
 
 
 # General parser/writer for all txt files, but not very useful
@@ -49,7 +53,9 @@ class PikminTxt(object):
         self._root = TextRoot()
 
     def from_file(self, f):
-        self._root = TextRoot(parse_structure(f, depth=0))
+        self._root, brackets = TextRoot(parse_structure(f, depth=0))
+        if brackets != 0:
+            raise RuntimeError("Syntax error: the amount of opening and closing brackets doesn't match.")
 
     def from_text(self, text):
         f = StringIO(text)
@@ -297,6 +303,9 @@ class PikminGenFile(PikminTxt):
 
         for pikminobject in self.objects:
             node = pikminobject.to_textnode()
+            for comment in pikminobject.preceeding_comment:
+               assert comment.startswith("#")
+               self._root.append([comment.strip()])
             self._root.append(node)
 
         super().write(f, *args, **kwargs)
@@ -324,6 +333,7 @@ def gen_readcomments(f):
                 addcomments = True
 
     return comments
+
 
 if __name__ == "__main__":
     import os
