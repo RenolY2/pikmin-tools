@@ -28,6 +28,7 @@ def make_default_config():
     cfg["gen editor"] = {
         "InvertZoom": "False",
         "GroundObjectsWhenMoving": "False",
+        "GroundObjectsWhenAdding": "True",
         "renderStartPos": "False"
     }
     cfg["model render"] = {
