@@ -18,7 +18,8 @@ from pikmingen import PikminObject
 from configuration import read_config, make_default_config, save_cfg
 
 import pikmingen_widgets as pikwidgets
-from pikmingen_widgets import GenMapViewer, PikminSideWidget, PikObjectEditor
+from pikmingen_widgets import (GenMapViewer, PikminSideWidget, PikObjectEditor, open_error_dialog,
+                               catch_exception_with_dialog)
 from lib.rarc import Archive
 
 PIKMIN2GEN = "Generator files (defaultgen.txt;initgen.txt;plantsgen.txt;*.txt)"
@@ -33,10 +34,9 @@ class GenEditor(QMainWindow):
 
         try:
             self.configuration = read_config()
-            print("config loaded")
+            print("Config file loaded")
         except FileNotFoundError as e:
-            print(e)
-            print("creating file...")
+            print("No config file found, creating default config...")
             self.configuration = make_default_config()
 
         self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
@@ -82,7 +82,7 @@ class GenEditor(QMainWindow):
     def setup_ui(self):
         self.resize(1000, 800)
         #self.setMinimumSize(QSize(930, 850))
-        self.setWindowTitle("Pikmin 2 Gen Editor")
+        self.setWindowTitle("Pikmin 2 Generators Editor")
 
         self.setup_ui_menubar()
         self.setup_ui_toolbar()
@@ -104,7 +104,7 @@ class GenEditor(QMainWindow):
 
         QtWidgets.QShortcut(Qt.CTRL + Qt.Key_E, self).activated.connect(self.action_open_editwindow)
         QtWidgets.QShortcut(Qt.Key_M, self).activated.connect(self.shortcut_move_objects)
-        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_G, self).activated.connect(self.action_ground_objects)
+        QtWidgets.QShortcut(Qt.Key_G, self).activated.connect(self.action_ground_objects)
         QtWidgets.QShortcut(Qt.CTRL + Qt.Key_A, self).activated.connect(self.shortcut_open_add_item_window)
         self.statusbar = QStatusBar(self)
         self.statusbar.setObjectName("statusbar")
@@ -205,7 +205,6 @@ class GenEditor(QMainWindow):
         self.pikmin_gen_view.rotate_current.connect(self.action_rotate_object)
 
     def action_open_rotationedit_window(self):
-        print("wot")
         if self.edit_spawn_window is None:
             self.edit_spawn_window = pikwidgets.SpawnpointEditor()
             self.edit_spawn_window.position.setText("{0}, {1}, {2}".format(
@@ -222,14 +221,14 @@ class GenEditor(QMainWindow):
             self, "Open File",
             self.pathsconfig["gen"],
             PIKMIN2GEN + ";;All files (*)")
-        print("doooone")
-        if filepath:
-            print("resetting")
-            self.reset()
-            print("done")
-            print("chosen type:", choosentype)
 
-            with open(filepath, "r", encoding="shift-jis") as f:
+        if filepath:
+            print("Resetting editor")
+            self.reset()
+            print("Reset done")
+            print("Chosen file type:", choosentype)
+
+            with open(filepath, "r", encoding="shift_jis-2004", errors="backslashreplace") as f:
                 try:
                     self.pikmin_gen_file = PikminGenFile()
                     self.pikmin_gen_file.from_file(f)
@@ -237,7 +236,7 @@ class GenEditor(QMainWindow):
                     self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
                     self.pikmin_gen_view.update()
 
-                    print("ok")
+                    print("File loaded")
                     # self.bw_map_screen.update()
                     # path_parts = path.split(filepath)
                     self.setWindowTitle("Pikmin 2 Generators Editor - {0}".format(filepath))
@@ -246,17 +245,19 @@ class GenEditor(QMainWindow):
                     self.current_gen_path = filepath
 
                 except Exception as error:
-                    print("error", error)
+                    print("Error appeared while loading:", error)
                     traceback.print_exc()
+                    open_error_dialog(str(error), self)
 
     def button_save_level(self):
         if self.current_gen_path is not None:
-            with open(self.current_gen_path, "w", encoding="shift-jis") as f:
+            with open(self.current_gen_path, "w", encoding="shift-jis-2004", errors="backslashreplace") as f:
                 try:
                     self.pikmin_gen_file.write(f)
                 except Exception as error:
-                    print("error", error)
+                    print("Error appeared while saving:", error)
                     traceback.print_exc()
+                    open_error_dialog(str(error), self)
                 else:
                     self.statusbar.showMessage("Saved to {0}".format(self.current_gen_path))
         else:
@@ -268,7 +269,7 @@ class GenEditor(QMainWindow):
             self.pathsconfig["gen"],
             PIKMIN2GEN + ";;All files (*)")
         if filepath:
-            with open(filepath, "w", encoding="shift-jis") as f:
+            with open(filepath, "w", encoding="shift-jis-2004", errors="backslashreplace") as f:
                 try:
                     self.pikmin_gen_file.write(f)
                     self.setWindowTitle("Pikmin 2 Generators Editor - {0}".format(filepath))
@@ -277,8 +278,9 @@ class GenEditor(QMainWindow):
                     self.current_gen_path = filepath
 
                 except Exception as error:
-                    print("error", error)
+                    print("Error appeared while saving:", error)
                     traceback.print_exc()
+                    open_error_dialog(str(error), self)
                 else:
                     self.statusbar.showMessage("Saved to {0}".format(self.current_gen_path))
 
@@ -310,8 +312,9 @@ class GenEditor(QMainWindow):
             self.pathsconfig["collision"] = filepath
             save_cfg(self.configuration)
 
-        except:
+        except Exception as e:
             traceback.print_exc()
+            open_error_dialog(str(e), self)
 
     def button_load_collision_grid(self):
         try:
@@ -350,14 +353,15 @@ class GenEditor(QMainWindow):
             self.pathsconfig["collision"] = filepath
             save_cfg(self.configuration)
 
-        except:
+        except Exception as e:
             traceback.print_exc()
+            open_error_dialog(str(e), self)
 
     def action_close_edit_startpos_window(self):
         self.edit_spawn_window.destroy()
         self.edit_spawn_window = None
 
-    @catch_exception
+    @catch_exception_with_dialog
     def action_save_startpos(self):
         pos, direction = self.edit_spawn_window.get_pos_dir()
         self.pikmin_gen_file.startpos_x = pos[0]
@@ -411,6 +415,12 @@ class GenEditor(QMainWindow):
         newobj.position_x = newobj.x = x
         newobj.position_z = newobj.z = z
         newobj.offset_x = newobj.offset_z = 0.0
+
+        if self.editorconfig.getboolean("GroundObjectsWhenAdding") is True:
+            if self.pikmin_gen_view.collision is not None:
+                y = self.pikmin_gen_view.collision.collide_ray_downwards(newobj.x, newobj.z)
+                newobj.y = newobj.position_y = y
+                newobj.offset_y = 0
 
         self.pikmin_gen_file.objects.append(newobj)
         self.pikmin_gen_view.update()
@@ -523,6 +533,8 @@ class GenEditor(QMainWindow):
 
             if len(self.pikmin_gen_view.selected) == 1 and self.pikmin_gen_view.selected[0] is obj:
                 self.pik_control.reset_info()
+            elif obj in self.pik_control.objectlist:
+                self.pik_control.reset_info()
             if obj in self.pikmin_gen_view.selected:
                 self.pikmin_gen_view.selected.remove(obj)
 
@@ -557,6 +569,8 @@ class GenEditor(QMainWindow):
 
                 if len(self.pikmin_gen_view.selected) == 1 and self.pikmin_gen_view.selected[0] is obj:
                     self.pik_control.reset_info()
+                elif obj in self.pik_control.objectlist:
+                    self.pik_control.reset_info()
                 if obj in self.pikmin_gen_view.selected:
                     self.pikmin_gen_view.selected.remove(obj)
 
@@ -569,12 +583,12 @@ class GenEditor(QMainWindow):
         def change_field(text):
             if text == "":
                 return
-
             try:
                 #val = float(getattr(self.pik_control, attribute).text())
                 val = float(text)
             except Exception as e:
                 print(e)
+                #open_error_dialog(str(e), self)
             else:
                 if len(self.pikmin_gen_view.selected) == 1:
                     pikobject = self.pikmin_gen_view.selected[0]
@@ -648,6 +662,17 @@ class GenEditor(QMainWindow):
 
             else:
                 self.pik_control.reset_info("{0} objects selected".format(len(self.pikmin_gen_view.selected)))
+                """objectnames = []
+                for obj in self.pikmin_gen_view.selected:
+                    if len(objectnames) >= 30:
+                        break
+
+                    objectnames.append(obj.get_useful_object_name())
+
+                objectnames.sort()
+
+                self.pik_control.comment_label.setText("Selected objects:\n" + (", ".join(objectnames)))"""
+                self.pik_control.set_objectlist(self.pikmin_gen_view.selected)
 
     @catch_exception
     def mapview_showcontextmenu(self, position):
@@ -724,13 +749,21 @@ class EditorHistory(object):
 
 if __name__ == "__main__":
     import sys
+    import platform
 
     app = QApplication(sys.argv)
+    if platform.system() == "Windows":
+        import ctypes
+        myappid = 'P2GeneratorsEditor'  # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
+    with open("log.txt", "w") as f:
+        #sys.stdout = f
+        #sys.stderr = f
+        pikmin_gui = GenEditor()
+        pikmin_gui.setWindowIcon(QtGui.QIcon('resources/icon.ico'))
+        pikmin_gui.show()
+        err_code = app.exec()
+        #traceback.print_exc()
 
-    pikmin_gui = GenEditor()
-
-    pikmin_gui.show()
-    err_code = app.exec()
-    #traceback.print_exc()
     sys.exit(err_code)

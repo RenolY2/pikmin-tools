@@ -20,7 +20,7 @@ from pikmingen import PikminObject
 from libpiktxt import PikminTxt
 import pikmingen
 
-ENTITY_SIZE = 10
+ENTITY_SIZE = 14
 
 DEFAULT_ENTITY = QColor("black")
 DEFAULT_MAPZONE = QColor("grey")
@@ -58,6 +58,17 @@ OBJECT_SIZES = {
     pikmingen.ONYN_YELLOWONION: 47,
     pikmingen.ONYN_ROCKET: 55,
 }
+
+
+def catch_exception_with_dialog(func):
+    def handle(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            traceback.print_exc()
+            open_error_dialog(str(e), None)
+    return handle
+
 
 class GenMapViewer(QWidget):
     mouse_clicked = pyqtSignal(QMouseEvent)
@@ -394,14 +405,7 @@ class GenMapViewer(QWidget):
                     #p.setPen(QColor(color))
                     last_color = color
 
-                if isselected:
-                    p.setPen(QColor("blue"))
-                    angle = pikminobject.get_horizontal_rotation()
-                    if angle is not None:
-                        pointx = x
-                        pointz = z + 25*scalez
-                        relx, relz = rotate_rel(pointx, pointz, x, z, angle)
-                        p.drawLine(x, z, x-relx, z+relz)
+
 
                 if drawcircle:
                     if not isselected:
@@ -420,6 +424,16 @@ class GenMapViewer(QWidget):
                 else:
                     #p.drawRect(x-size//2, z-size//2, size, size)
                     p.drawEllipse(x - size // 2, z - size // 2, size, size)
+
+                if isselected:
+                    p.setPen(QColor("blue"))
+                    angle = pikminobject.get_horizontal_rotation()
+                    if angle is not None:
+                        pointx = x
+                        pointz = z + 25*scalez
+                        relx, relz = rotate_rel(pointx, pointz, x, z, angle)
+                        p.drawLine(x, z, x-relx, z+relz)
+                    p.setPen(color)
 
             arrows = []
             pen = p.pen()
@@ -696,20 +710,31 @@ class GenMapViewer(QWidget):
                         #centerz += way_z
                         selected.append(pikminobject)
 
-            if len(selected) == 0:
+            """if len(selected) == 0:
                 self.move_startpos = []
             else:
                 count = float(len(selected))
-                self.move_startpos = selected
+                self.move_startpos = selected"""
 
             if not self.shift_is_pressed:
-                self.selected = selected
+
+                if len(self.selected) != len(selected):
+                    self.selected = selected
+                    self.select_update.emit(event)
+                elif any(x not in selected for x in self.selected) or any(x not in self.selected for x in selected):
+                    self.selected = selected
+                    self.select_update.emit(event)
+
             else:
+                changed = False
                 for val in selected:
                     if val not in self.selected:
+                        changed = True
                         self.selected.append(val)
 
-            self.select_update.emit(event)
+                if changed:
+                    self.select_update.emit(event)
+
             self.update()
 
         if self.right_button_down:
@@ -809,9 +834,17 @@ class PikminSideWidget(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         parent = args[0]
+
         self.parent = parent
-        self.setMaximumSize(QSize(250, 1200))
+        self.setMaximumSize(QSize(250, 1500))
         self.verticalLayout = QVBoxLayout(self)
+        self.verticalLayout.setAlignment(Qt.AlignBottom)
+
+        font = QFont()
+        font.setFamily("Consolas")
+        font.setStyleHint(QFont.Monospace)
+        font.setFixedPitch(True)
+        font.setPointSize(9)
 
         self.verticalLayout.setObjectName("verticalLayout")
 
@@ -827,6 +860,13 @@ class PikminSideWidget(QWidget):
         self.button_move_object.setText("Move Object(s)")
         self.button_edit_object.setText("Edit Object")
 
+        self.button_add_object.setToolTip("Hotkey: Ctrl+A")
+        self.button_remove_object.setToolTip("Hotkey: Delete")
+        self.button_ground_object.setToolTip("Hotkey: G")
+        self.button_move_object.setToolTip("Hotkey: M\nWhen enabled, hold R to rotate when one object is selected.")
+        self.button_edit_object.setToolTip("Hotkey: Ctrl+E")
+
+
         self.button_add_object.setCheckable(True)
         self.button_move_object.setCheckable(True)
 
@@ -837,19 +877,23 @@ class PikminSideWidget(QWidget):
         self.lineedit_rotationx = QLineEdit(parent)
         self.lineedit_rotationy = QLineEdit(parent)
         self.lineedit_rotationz = QLineEdit(parent)
-
         self.verticalLayout.addWidget(self.button_add_object)
         self.verticalLayout.addWidget(self.button_remove_object)
         self.verticalLayout.addWidget(self.button_ground_object)
         self.verticalLayout.addWidget(self.button_move_object)
         self.verticalLayout.addWidget(self.button_edit_object)
-        self.verticalLayout.addStretch(30)
+        self.verticalLayout.addStretch(20)
 
         self.name_label = QLabel(parent)
-        self.identifier_label = QLabel(parent)
-        self.identifier_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.name_label.setFont(font)
+        self.name_label.setWordWrap(True)
+        self.name_label.setMinimumSize(self.name_label.width(), 30)
+        #self.identifier_label = QLabel(parent)
+        #self.identifier_label.setFont(font)
+        #self.identifier_label.setMinimumSize(self.name_label.width(), 50)
+        #self.identifier_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.verticalLayout.addWidget(self.name_label)
-        self.verticalLayout.addWidget(self.identifier_label)
+        #self.verticalLayout.addWidget(self.identifier_label)
 
         self.verticalLayout.addWidget(self.lineedit_coordinatex)
         self.verticalLayout.addWidget(self.lineedit_coordinatey)
@@ -866,8 +910,11 @@ class PikminSideWidget(QWidget):
         self.comment_label = QLabel(parent)
         self.comment_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.comment_label.setWordWrap(True)
+        self.comment_label.setFont(font)
         self.verticalLayout.addWidget(self.comment_label)
         self.verticalLayout.addStretch(500)
+
+        self.objectlist = []
 
         self.reset_info()
 
@@ -878,7 +925,7 @@ class PikminSideWidget(QWidget):
         font.setFixedPitch(True)
         font.setPointSize(10)
 
-        layout = QHBoxLayout(self)
+        layout = QHBoxLayout()
         label = QLabel(label, self)
         label.setFont(font)
         layout.addWidget(label)
@@ -887,7 +934,7 @@ class PikminSideWidget(QWidget):
 
     def reset_info(self, info="None selected"):
         self.name_label.setText(info)
-        self.identifier_label.setText("")
+        #self.identifier_label.setText("")
         self.comment_label.setText("")
 
         self.lineedit_coordinatex.setText("")
@@ -906,9 +953,11 @@ class PikminSideWidget(QWidget):
         self.lineedit_rotationy.setDisabled(True)
         self.lineedit_rotationz.setDisabled(True)
 
+        self.objectlist = []
+
     def set_info(self, obj, position, rotation=None):
         self.name_label.setText("Selected: {}".format(obj.get_useful_object_name()))
-        self.identifier_label.setText(obj.get_identifier())
+        #self.identifier_label.setText(obj.get_identifier())
 
         comment = "Object notes:\n"
         for part in obj.preceeding_comment:
@@ -936,6 +985,27 @@ class PikminSideWidget(QWidget):
             self.lineedit_rotationx.setText(str(rotation[0]))
             self.lineedit_rotationy.setText(str(rotation[1]))
             self.lineedit_rotationz.setText(str(rotation[2]))
+
+        self.objectlist = []
+
+    def set_objectlist(self, objs):
+        self.objectlist = []
+        objectnames = []
+
+        for obj in objs:
+            if len(objectnames) < 25:
+                objectnames.append(obj.get_useful_object_name())
+            self.objectlist.append(obj)
+
+
+        objectnames.sort()
+        text = "Selected objects:\n" + (", ".join(objectnames))
+        diff = len(objs) - len(objectnames)
+        if diff == 1:
+            text += "\nAnd {0} more object".format(diff)
+        elif diff > 1:
+            text += "\nAnd {0} more objects".format(diff)
+        self.comment_label.setText(text)
 
 
 class PikObjectEditor(QMdiSubWindow):
@@ -1001,6 +1071,7 @@ class PikObjectEditor(QMdiSubWindow):
         self.setWindowTitle(self.windowname)
 
         QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self).activated.connect(self.emit_save_object)
+        self.button_savetext.setToolTip("Hotkey: Ctrl+S")
         #self.bla = QtWidgets.QShortcut(Qt.CTRL + Qt.Key_W, self)
         #self.bla.activated.connect(self.shortcut_closewindow)
 
@@ -1015,7 +1086,6 @@ class PikObjectEditor(QMdiSubWindow):
 
     @catch_exception
     def shortcut_closewindow(self):
-        print("Halleluja")
         self.close()
 
     def closeEvent(self, event):
@@ -1024,9 +1094,13 @@ class PikObjectEditor(QMdiSubWindow):
     def set_content(self, pikminobject):
         try:
             text = StringIO()
+            for comment in pikminobject.preceeding_comment:
+                assert comment.startswith("#")
+                text.write(comment.strip())
+                text.write("\n")
             node = pikminobject.to_textnode()
             piktxt = PikminTxt()
-            piktxt.write(text, node=node)
+            piktxt.write(text, node=[node])
             self.textbox_xml.setText(text.getvalue())
             self.entity = pikminobject
         except:
@@ -1038,21 +1112,6 @@ class PikObjectEditor(QMdiSubWindow):
 
         self.triggered.emit(self)
 
-    """def my_context_menu(self, position):
-        try:
-            #print("Triggered!")
-            #print(event.x(), event.y())
-            #print(args)
-            context_menu = self.textbox_xml.createStandardContextMenu()
-            context_menu.addAction(self.goto_id_action)
-            context_menu.exec(self.mapToGlobal(position))
-            context_menu.destroy()
-            del context_menu
-            #self.context_menu.exec(event.globalPos())
-            #return super().contextMenuEvent(event)
-        except:
-            traceback.print_exc()"""
-
     def get_content(self):
         try:
             content = self.textbox_xml.toPlainText()
@@ -1060,8 +1119,9 @@ class PikObjectEditor(QMdiSubWindow):
             obj.from_text(content)
             obj.get_rotation()
             return obj
-        except:
+        except Exception as e:
             traceback.print_exc()
+            open_error_dialog(str(e), self)
             return None
 
     def set_title(self, objectname):
@@ -1108,6 +1168,7 @@ class AddPikObjectWindow(PikObjectEditor):
         self.textbox_xml = QTextEdit(self.centralwidget)
         self.button_savetext = QPushButton(self.centralwidget)
         self.button_savetext.setText("Add Object")
+        self.button_savetext.setToolTip("Hotkey: Ctrl+S")
         self.button_savetext.setMaximumWidth(400)
         self.textbox_xml.setLineWrapMode(QTextEdit.NoWrap)
         self.textbox_xml.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -1121,7 +1182,13 @@ class AddPikObjectWindow(PikObjectEditor):
         self.verticalLayout.addWidget(self.button_savetext)
         self.setWindowTitle(self.windowname)
 
-        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self).activated.connect(self.emit_add_object)
+        #QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self).activated.connect(self.emit_add_object)
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent):
+        if event.key() == Qt.CTRL + Qt.Key_S:
+            self.emit_add_object()
+        else:
+            super().keyPressEvent(event)
 
     def emit_add_object(self):
         self.button_savetext.pressed.emit()
@@ -1137,13 +1204,12 @@ class AddPikObjectWindow(PikObjectEditor):
 
         self.template_menu.currentIndexChanged.connect(self.read_template_file_into_window)
 
-    @catch_exception
+    @catch_exception_with_dialog
     def read_template_file_into_window(self, index):
         if index == 1:
             self.textbox_xml.setText("")
         elif index > 1:
             filename = self.template_menu.currentText()
-            print(filename, index)
 
             with open(os.path.join("./object_templates", filename), "r", encoding="utf-8") as f:
                 self.textbox_xml.setText(f.read())
@@ -1197,3 +1263,9 @@ class SpawnpointEditor(QMdiSubWindow):
         assert len(pos) == 3
 
         return pos, direction
+
+
+def open_error_dialog(errormsg, self):
+    errorbox = QtWidgets.QMessageBox()
+    errorbox.critical(self, "Error", errormsg)
+    errorbox.setFixedSize(500, 200)

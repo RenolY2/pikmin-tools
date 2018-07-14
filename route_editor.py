@@ -226,7 +226,10 @@ class EditorMainWindow(QMainWindow):
             with open(filepath, "r") as f:
                 verts, faces, normals = read_obj(f)
 
-            tmprenderwindow = TempRenderWindow(verts, faces)
+            width = int(self.configuration["model render"]["Width"])
+            height = int(self.configuration["model render"]["Height"])
+
+            tmprenderwindow = TempRenderWindow(verts, faces, render_res=(width, height))
             tmprenderwindow.show()
 
             framebuffer = tmprenderwindow.widget.grabFramebuffer()
@@ -247,7 +250,7 @@ class EditorMainWindow(QMainWindow):
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
                 self.pathsconfig["collision"],
-                "Grid.bin (*.bin);;Archived grid.bin (texts.arc, texts.szs);;All files (*)")
+                "Archived grid.bin (texts.arc, texts.szs);;Grid.bin (*.bin);;All files (*)")
             print(choosentype)
 
             if choosentype == "Archived grid.bin (texts.arc, texts.szs)" or filepath.endswith(".szs") or filepath.endswith(".arc"):
@@ -266,7 +269,10 @@ class EditorMainWindow(QMainWindow):
             verts = collision.vertices
             faces = [face[0] for face in collision.faces]
 
-            tmprenderwindow = TempRenderWindow(verts, faces)
+            width = int(self.configuration["model render"]["Width"])
+            height = int(self.configuration["model render"]["Height"])
+
+            tmprenderwindow = TempRenderWindow(verts, faces, render_res=(width, height))
             tmprenderwindow.show()
 
             framebuffer = tmprenderwindow.widget.grabFramebuffer()
