@@ -468,8 +468,28 @@ class PikminObject(object):
                 return GATE_SAND
             elif subtype == "{dgat}":
                 return GATE_ELECTRIC
+            elif subtype == "{dwfl}":
+                blocktype = itemdata[4]
+                is_seesaw = itemdata[5]
+                suffix = ""
+
+                if is_seesaw == "1":
+                    suffix = " [Seesaw]"
+                elif is_seesaw != "0":
+                    suffix = " [Invalid]"
+
+                if blocktype == "0":
+                    return "Small Block"+suffix
+                elif blocktype == "1":
+                    return "Normal Block"+suffix
+                elif blocktype == "2":
+                    return "Paper Bag"+suffix
+                else:
+                    return "Invalid dwfl"
+
 
             return self.object_type+subtype
+
         elif self.object_type == "{teki}":
             identifier = self.identifier_misc[1][1:]
             if identifier in TEKIS:

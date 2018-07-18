@@ -322,36 +322,36 @@ class GenEditor(QMainWindow):
                 self, "Open File",
                 self.pathsconfig["collision"],
                 "Archived grid.bin (texts.arc, texts.szs);;Grid.bin (*.bin);;All files (*)")
+            if filepath:
+                if (choosentype == "Archived grid.bin (texts.arc, texts.szs)"
+                        or filepath.endswith(".szs")
+                        or filepath.endswith(".arc")):
+                    load_from_arc = True
+                else:
+                    load_from_arc = False
 
-            if (choosentype == "Archived grid.bin (texts.arc, texts.szs)"
-                    or filepath.endswith(".szs")
-                    or filepath.endswith(".arc")):
-                load_from_arc = True
-            else:
-                load_from_arc = False
+                with open(filepath, "rb") as f:
+                    if load_from_arc:
+                        archive = Archive.from_file(f)
+                        f = archive["text/grid.bin"]
+                    collision = py_obj.PikminCollision(f)
 
-            with open(filepath, "rb") as f:
-                if load_from_arc:
-                    archive = Archive.from_file(f)
-                    f = archive["text/grid.bin"]
-                collision = py_obj.PikminCollision(f)
+                verts = collision.vertices
+                faces = [face[0] for face in collision.faces]
+                width = int(self.configuration["model render"]["Width"])
+                height = int(self.configuration["model render"]["Height"])
+                tmprenderwindow = opengltext.TempRenderWindow(verts, faces, render_res=(width, height))
+                tmprenderwindow.show()
 
-            verts = collision.vertices
-            faces = [face[0] for face in collision.faces]
-            width = int(self.configuration["model render"]["Width"])
-            height = int(self.configuration["model render"]["Height"])
-            tmprenderwindow = opengltext.TempRenderWindow(verts, faces, render_res=(width, height))
-            tmprenderwindow.show()
+                framebuffer = tmprenderwindow.widget.grabFramebuffer()
+                framebuffer.save("tmp_image.png", "PNG")
+                self.pikmin_gen_view.level_image = framebuffer
 
-            framebuffer = tmprenderwindow.widget.grabFramebuffer()
-            framebuffer.save("tmp_image.png", "PNG")
-            self.pikmin_gen_view.level_image = framebuffer
+                tmprenderwindow.destroy()
 
-            tmprenderwindow.destroy()
-
-            self.pikmin_gen_view.set_collision(verts, faces)
-            self.pathsconfig["collision"] = filepath
-            save_cfg(self.configuration)
+                self.pikmin_gen_view.set_collision(verts, faces)
+                self.pathsconfig["collision"] = filepath
+                save_cfg(self.configuration)
 
         except Exception as e:
             traceback.print_exc()
@@ -619,9 +619,7 @@ class GenEditor(QMainWindow):
                 currentobj = selected[0]
 
                 if currentobj not in self.editing_windows:
-                    self.editing_windows[currentobj] = PikObjectEditor(
-                        windowtype="Object {0}".format(currentobj.object_type)
-                    )
+                    self.editing_windows[currentobj] = PikObjectEditor()
                     self.editing_windows[currentobj].set_content(currentobj)
 
                     @catch_exception

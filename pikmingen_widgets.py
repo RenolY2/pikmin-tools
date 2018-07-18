@@ -1,5 +1,6 @@
 import traceback
 import os
+from time import sleep
 from timeit import default_timer
 from io import StringIO
 from math import sin, cos, atan2, radians, degrees
@@ -46,6 +47,10 @@ BRIDGE_GRAPHICS = {pikmingen.BRIDGE_SHORT: QtGui.QImage("resources/sbridge.png",
 
 GATE_GRAPHICS = {pikmingen.GATE_SAND: QtGui.QImage("resources/gate.png", "png"),
                  pikmingen.GATE_ELECTRIC: QtGui.QImage("resources/dgat.png", "png")}
+
+DOWNFLOOR_GRAPHICS = {"0": QtGui.QImage("resources/downfloor1.png"),
+                      "1": QtGui.QImage("resources/downfloor2.png"),
+                      "2": QtGui.QImage("resources/paperbag.png")}
 
 ONION_COLORTABLE = {pikmingen.ONYN_ROCKET: QColor("grey"),
                     pikmingen.ONYN_BLUEONION: QColor("blue"),
@@ -154,6 +159,7 @@ class GenMapViewer(QWidget):
 
         self.shift_is_pressed = False
         self.rotation_is_pressed = False
+        self.last_drag_update = 0
 
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
@@ -171,6 +177,7 @@ class GenMapViewer(QWidget):
         self.SIZEY = 1024
         self.origin_x = self.SIZEX//2
         self.origin_z = self.SIZEY//2
+        self.last_drag_update = 0
 
         self.offset_x = 0
         self.offset_z = 0
@@ -219,32 +226,37 @@ class GenMapViewer(QWidget):
             self._zoom_factor += int(fac*10)
             self.update()
 
-    @catch_exception
+    #@catch_exception_with_dialog
     def paintEvent(self, event):
-        start = default_timer()
+        #start = default_timer()
 
         p = self.p
         p.begin(self)
         h = self.height()
         w = self.width()
-
+        drawLine = p.drawLine
+        setBrush = p.setBrush
+        setPen = p.setPen
+        p_pen = p.pen
+        save, translate, restore, rotate = p.save, p.translate, p.restore, p.rotate
+        drawImage = p.drawImage
+        drawRect = p.drawRect
+        drawEllipse = p.drawEllipse
 
         zf = self.zoom_factor
-        current_entity = self.current_waypoint
         last_color = None
         draw_bound = event.rect().adjusted(-ENTITY_SIZE//2, -ENTITY_SIZE//2, ENTITY_SIZE//2, ENTITY_SIZE//2)
-        #contains = draw_bound.contains
-        selected_entities = self.selected
+
 
         startx, starty = draw_bound.topLeft().x(), draw_bound.topLeft().y()
         endx, endy = startx+draw_bound.width(), starty+draw_bound.height()
-        p.setBrush(QColor("white"))
-        p.drawRect(0, 0, w-1, h-1)
+        setBrush(QColor("white"))
+        drawRect(0, 0, w-1, h-1)
 
-        pen = p.pen()
+        pen = p_pen()
         defaultwidth = pen.width()
         pen.setWidth(1)
-        p.setPen(pen)
+        setPen(pen)
         offsetx, offsetz = (-self.origin_x-self.origin_x-self.offset_x,
                             -self.origin_z-self.origin_z-self.offset_z) # (self.origin_x)+self.offset_x, self.origin_z+self.offset_z
         #print(startx,starty, endx,endy, zf, offsetx, offsetz)
@@ -273,23 +285,23 @@ class GenMapViewer(QWidget):
             startz = (-6000 - midz) * scalez
             endx = (6000 - midx) * scalex
             endz = (6000 - midz) * scalez
-            p.drawImage(QRect(startx, startz, endx-startx, endz-startz),
+            drawImage(QRect(startx, startz, endx-startx, endz-startz),
                         self.level_image)
 
-        pen = p.pen()
+        pen = p_pen()
         prevwidth = pen.width()
         pen.setWidth(5)
-        p.setPen(pen)
+        setPen(pen)
         # DRAW COORDINATE FIELD
-        if True:
-            x = (0-midx)*scalex
-            p.drawLine(QPoint(x,-5000), QPoint(x,+5000))
-        if True:
-            z = (0-midz)*scalez
-            p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
+        x = (0-midx)*scalex
+        #p.drawLine(QPoint(x,-5000), QPoint(x,+5000))
+        drawLine(x, -5000, x, +5000)
+        z = (0-midz)*scalez
+        #p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
+        drawLine(-5000, z, +5000, z)
 
         pen.setWidth(prevwidth)
-        p.setPen(pen)
+        setPen(pen)
 
         step = 500
 
@@ -297,15 +309,15 @@ class GenMapViewer(QWidget):
         loop_endx = int((drawendxView+step) - (drawendxView+step) % step)
         for x in range(loop_startx, loop_endx + 4*500, 500):
             x = (x-midx)*scalex
-            if 0 <= x <= w or True:
-                p.drawLine(QPoint(x, -5000), QPoint(x, +5000))
+            #p.drawLine(QPoint(x, -5000), QPoint(x, +5000))
+            drawLine(x, -5000, x, +5000)
 
         loop_startz = int(drawstartz - drawstartz % step)
         loop_endz = int((drawendzView + step) - (drawendzView + step) % step)
         for z in range(loop_startz, loop_endz + 2*500, 500):
             z = (z-midz)*scalez
-            if 0 <= z <= h or True:
-                p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
+            #p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
+            drawLine(-5000, z, +5000, z)
 
         if self.pikmin_generators is not None:
             if self.editorconfig is not None:
@@ -316,14 +328,14 @@ class GenMapViewer(QWidget):
 
                     pen.setColor(QColor("orange"))
                     pen.setWidth(10)
-                    p.setPen(pen)
+                    setPen(pen)
 
                     size = ENTITY_SIZE*scalex + 1
-                    p.drawRect(x - size // 2, z - size // 2, size, size)
+                    drawRect(x - size // 2, z - size // 2, size, size)
 
                     pen.setColor(QColor("black"))
                     pen.setWidth(prevwidth)
-                    p.setPen(pen)
+                    setPen(pen)
 
                     # draw startPos end
 
@@ -339,36 +351,66 @@ class GenMapViewer(QWidget):
 
                 if pikminobject.object_type == "{item}":
                     if name in BRIDGE_LENGTHS:
-                        p.save()
+                        save()
                         length = BRIDGE_LENGTHS[name]*scalex
                         angle = pikminobject.get_horizontal_rotation()
-                        p.translate(x, z)
-                        p.rotate(-angle)
+                        translate(x, z)
+                        rotate(-angle)
                         width = 130*scalex
                         #p.drawRect(x-width//2, z, width, length)
-                        p.drawImage(QRect(0 - width // 2, 0 - (42)*scalex, width, 38*scalex + length),
+                        drawImage(QRect(0 - width // 2, 0 - (42)*scalex, width, 38*scalex + length),
                                     BRIDGE_GRAPHICS[name])
                         #p.drawRect(0 - width // 2, 0, width, length)
 
-                        p.restore()
+                        restore()
                     elif name in GATE_GRAPHICS:
-                        p.save()
+                        save()
                         angle = pikminobject.get_horizontal_rotation()
-                        p.translate(x, z)
-                        p.rotate(-angle)
+                        translate(x, z)
+                        rotate(-angle)
 
                         length = 267*scalex
 
                         if name == pikmingen.GATE_ELECTRIC:
                             width = 35*scalez
-                            p.drawImage(QRect(0 - length // 2, 0 - width//2-10*scalex, length, width),
+                            drawImage(QRect(0 - length // 2, 0 - width//2-10*scalex, length, width),
                                         GATE_GRAPHICS[name])
                         else:
                             width = 70*scalez
-                            p.drawImage(QRect(0 - length // 2, 0 - width // 2, length, width),
+                            drawImage(QRect(0 - length // 2, 0 - width // 2, length, width),
                                         GATE_GRAPHICS[name])
-                        p.restore()
+                        restore()
 
+                    else:
+                        itemdata = pikminobject._object_data[0]
+                        if itemdata[0] == "{dwfl}":
+                            downfloortype = itemdata[4]
+                            image = None
+                            save()
+                            angle = pikminobject.get_horizontal_rotation()
+                            translate(x, z)
+                            rotate(-angle)
+
+                            if downfloortype == "0":
+                                # draw small block
+                                length = 100*scalex
+                                width = 100*scalez
+                                image = DOWNFLOOR_GRAPHICS[downfloortype]
+                            elif downfloortype == "1":
+                                # draw normal block
+                                length = 150*scalex
+                                width = 120*scalez
+                                image = DOWNFLOOR_GRAPHICS[downfloortype]
+                            elif downfloortype == "2":
+                                #draw paperbag
+                                length = 256*scalex
+                                width = 197*scalez
+                                image = DOWNFLOOR_GRAPHICS[downfloortype]
+
+                            if image is not None:
+                                drawImage(QRect(0 - length // 2, 0 - width // 2, length, width),
+                                          image)
+                            restore()
 
             for pikminobject in objects:
                 x,y,z = pikminobject.x, pikminobject.y, pikminobject.z
@@ -393,63 +435,56 @@ class GenMapViewer(QWidget):
 
                 if pikminobject in selected:
                     # print("vhanged")
-                    color = QColor("red")
+                    color = DEFAULT_SELECTED
                     isselected = True
 
                 # x, z = offsetx + x*zf, offsetz + z*zf
                 x, z = (x-midx)*scalex, (z-midz)*scalez
 
                 if last_color != color:
-                    p.setBrush(color)
-                    p.setPen(color)
+                    setBrush(color)
+                    setPen(color)
                     #p.setPen(QColor(color))
                     last_color = color
 
-
-
                 if drawcircle:
                     if not isselected:
-                        p.setBrush(DEFAULT_ENTITY)
-                        p.setPen(DEFAULT_ENTITY)
+                        setBrush(DEFAULT_ENTITY)
+                        setPen(DEFAULT_ENTITY)
                     else:
-                        p.setBrush(color)
-                        p.setPen(color)
+                        setBrush(color)
+                        setPen(color)
 
-                    p.drawEllipse(x-(size//2)-2, z-(size//2)-2, size+4, size+4)
+                    drawEllipse(x-(size//2)-2, z-(size//2)-2, size+4, size+4)
 
-                    p.setBrush(color)
-                    p.setPen(color)
+                    setBrush(color)
+                    setPen(color)
 
-                    p.drawEllipse(x - size // 2, z - size // 2, size, size)
+                    drawEllipse(x - size // 2, z - size // 2, size, size)
                 else:
                     #p.drawRect(x-size//2, z-size//2, size, size)
-                    p.drawEllipse(x - size // 2, z - size // 2, size, size)
+                    drawEllipse(x - size // 2, z - size // 2, size, size)
 
                 if isselected:
-                    p.setPen(QColor("blue"))
+                    setPen(QColor("blue"))
                     angle = pikminobject.get_horizontal_rotation()
                     if angle is not None:
                         pointx = x
                         pointz = z + 25*scalez
                         relx, relz = rotate_rel(pointx, pointz, x, z, angle)
-                        p.drawLine(x, z, x-relx, z+relz)
-                    p.setPen(color)
+                        drawLine(x, z, x-relx, z+relz)
+                    setPen(color)
 
             arrows = []
-            pen = p.pen()
+            pen = p_pen()
             prevwidth = pen.width()
             pen.setWidth(5)
             pen.setColor(DEFAULT_ENTITY)
-            p.setPen(pen)
-
-        if self.visualize_cursor is not None:
-            a, b = self.visualize_cursor
-            size = ENTITY_SIZE
-            p.drawRect(a-size//2, b-size//2, size, size)
+            setPen(pen)
 
         pen.setColor(QColor("red"))
         pen.setWidth(2)
-        p.setPen(pen)
+        setPen(pen)
 
         if self.selectionbox_start is not None and self.selectionbox_end is not None:
             startx, startz = ((self.selectionbox_start[0] - midx)*scalex,
@@ -466,7 +501,7 @@ class GenMapViewer(QWidget):
                                             startpoint])
             p.drawPolyline(selectionbox_polygon)
 
-        if self.highlighttriangle is not None:
+        """if self.highlighttriangle is not None:
             p1, p2, p3 = self.highlighttriangle
             p1x = (p1[0] - midx)*scalex
             p2x = (p2[0] - midx)*scalex
@@ -477,23 +512,17 @@ class GenMapViewer(QWidget):
 
             selectionbox_polygon = QPolygon([QPoint(p1x, p1z), QPoint(p2x, p2z), QPoint(p3x, p3z),
                                              QPoint(p1x, p1z)])
-            p.drawPolyline(selectionbox_polygon)
+            p.drawPolyline(selectionbox_polygon)"""
 
         p.end()
-        end = default_timer()
+        #end = default_timer()
 
         #print("time taken:", end-start, "sec")
-        self.last_render = end
-        #if end-start < 1/60.0:
-        #    sleep(1/60.0 - (end-start))
-
-    """def update(self):
-        current = default_timer()
-
-        if current-self.last_render < 1/90.0:
-            pass
-        else:
-            self.repaint()"""
+        """""#self.last_render = end
+        frame = 60.0
+        if end-start < 1/frame:
+            print("sleeping for", 1/frame - (end-start))
+            sleep(1/frame - (end-start))"""
 
     @catch_exception
     def mousePressEvent(self, event):
@@ -640,16 +669,34 @@ class GenMapViewer(QWidget):
         if self.mid_button_down:
             x, y = event.x(), event.y()
             d_x, d_y  = x - self.drag_last_pos[0], y - self.drag_last_pos[1]
+            """delta_length = (d_x**2+d_y**2)**0.5
+            LEN = 3
+            steps = int(delta_length // LEN)
+            rest = delta_length % LEN
+            print(d_x, d_y, (d_x**2+d_y**2)**0.5)
+            d_x = d_x / delta_length
+            d_y = d_y / delta_length
 
+            for i in range(steps+1):
+                if i == steps:
+                    steplen = rest
+                else:
+                    steplen = LEN
 
+                if self.zoom_factor > 1.0:
+                    self.offset_x += d_x*(1.0 + (self.zoom_factor-1.0)/2.0)*steplen
+                    self.offset_z += d_y*(1.0 + (self.zoom_factor-1.0)/2.0)*steplen
+                else:
+                    self.offset_x += d_x*steplen
+                    self.offset_z += d_y*steplen
+
+                self.update()"""
             if self.zoom_factor > 1.0:
-                self.offset_x += d_x*(1.0 + (self.zoom_factor-1.0)/2.0)
-                self.offset_z += d_y*(1.0 + (self.zoom_factor-1.0)/2.0)
+                self.offset_x += d_x * (1.0 + (self.zoom_factor - 1.0) / 2.0)
+                self.offset_z += d_y * (1.0 + (self.zoom_factor - 1.0) / 2.0)
             else:
                 self.offset_x += d_x
                 self.offset_z += d_y
-
-
             self.drag_last_pos = (event.x(), event.y())
             self.update()
 
@@ -1013,14 +1060,8 @@ class PikObjectEditor(QMdiSubWindow):
     closing = pyqtSignal()
 
     def __init__(self, *args, **kwargs):
-        if "windowtype" in kwargs:
-            self.windowname = kwargs["windowtype"]
-            del kwargs["windowtype"]
-        else:
-            self.windowname = "Pikmin Object"
-
         super().__init__(*args, **kwargs)
-
+        self.window_name = "Edit Pikmin Object"
         self.resize(900, 500)
         self.setMinimumSize(QSize(300, 300))
 
@@ -1068,12 +1109,10 @@ class PikObjectEditor(QMdiSubWindow):
 
         self.verticalLayout.addWidget(self.textbox_xml)
         self.verticalLayout.addWidget(self.button_savetext)
-        self.setWindowTitle(self.windowname)
+        self.setWindowTitle(self.window_name)
 
         QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self).activated.connect(self.emit_save_object)
         self.button_savetext.setToolTip("Hotkey: Ctrl+S")
-        #self.bla = QtWidgets.QShortcut(Qt.CTRL + Qt.Key_W, self)
-        #self.bla.activated.connect(self.shortcut_closewindow)
 
     def keyPressEvent(self, event: QtGui.QKeyEvent):
         if event.key() == Qt.CTRL + Qt.Key_W:
@@ -1103,6 +1142,7 @@ class PikObjectEditor(QMdiSubWindow):
             piktxt.write(text, node=[node])
             self.textbox_xml.setText(text.getvalue())
             self.entity = pikminobject
+            self.set_title(pikminobject.get_useful_object_name())
         except:
             traceback.print_exc()
 
@@ -1118,6 +1158,7 @@ class PikObjectEditor(QMdiSubWindow):
             obj = PikminObject()
             obj.from_text(content)
             obj.get_rotation()
+            self.set_title(obj.get_useful_object_name())
             return obj
         except Exception as e:
             traceback.print_exc()
@@ -1125,7 +1166,7 @@ class PikObjectEditor(QMdiSubWindow):
             return None
 
     def set_title(self, objectname):
-        self.setWindowTitle("{0} - {1}".format(self.windowname, objectname))
+        self.setWindowTitle("{0} - {1}".format(self.window_name, objectname))
 
     def reset(self):
         pass
@@ -1134,13 +1175,12 @@ class PikObjectEditor(QMdiSubWindow):
 class AddPikObjectWindow(PikObjectEditor):
     @catch_exception
     def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         if "windowtype" in kwargs:
-            self.windowname = kwargs["windowtype"]
+            self.window_name = kwargs["windowtype"]
             del kwargs["windowtype"]
         else:
-            self.windowname = "Add Pikmin Object"
-
-        super().__init__(*args, **kwargs)
+            self.window_name = "Add Pikmin Object"
 
         self.resize(900, 500)
         self.setMinimumSize(QSize(300, 300))
@@ -1180,7 +1220,7 @@ class AddPikObjectWindow(PikObjectEditor):
 
         self.verticalLayout.addWidget(self.textbox_xml)
         self.verticalLayout.addWidget(self.button_savetext)
-        self.setWindowTitle(self.windowname)
+        self.setWindowTitle(self.window_name)
 
         #QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self).activated.connect(self.emit_add_object)
 
@@ -1192,6 +1232,18 @@ class AddPikObjectWindow(PikObjectEditor):
 
     def emit_add_object(self):
         self.button_savetext.pressed.emit()
+
+    def get_content(self):
+        try:
+            content = self.textbox_xml.toPlainText()
+            obj = PikminObject()
+            obj.from_text(content)
+            obj.get_rotation()
+            return obj
+        except Exception as e:
+            traceback.print_exc()
+            open_error_dialog(str(e), self)
+            return None
 
     def setup_dropdown_menu(self):
         self.template_menu = QtWidgets.QComboBox(self)
