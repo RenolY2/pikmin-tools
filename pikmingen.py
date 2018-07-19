@@ -331,6 +331,7 @@ EXPKIT_TREASURES = {
     "11": "Geographic Projection",
     "12": "The Key"
 }
+
 class PikminObject(object):
     def __init__(self):
         self.version = "{v0.3}"
@@ -349,6 +350,9 @@ class PikminObject(object):
         self.preceeding_comment = []
 
         self._horizontal_rotation = None
+
+        self._useful_name = "None"
+
 
     def from_text(self, text):
         node = libpiktxt.PikminTxt()
@@ -369,6 +373,7 @@ class PikminObject(object):
                 break
 
         self.set_preceeding_comment(comments)
+        self.update_useful_name()
 
     def from_textnode(self, textnode):
         self.version = textnode[0]  # Always v0.3?
@@ -392,6 +397,7 @@ class PikminObject(object):
         else:
             self._horizontal_rotation = None
         #print("Object", self.identifier, "with position", self.position_x, self.position_y, self.position_z)
+        self.update_useful_name()
 
     def from_pikmin_object(self, other_pikminobj):
         self.version = other_pikminobj.version
@@ -421,6 +427,7 @@ class PikminObject(object):
             self._horizontal_rotation = float(self.get_rotation()[1])
         else:
             self._horizontal_rotation = None
+        self.update_useful_name()
 
     def copy(self):
         #newobj = PikminObject()
@@ -442,7 +449,13 @@ class PikminObject(object):
         else:
             return None
 
+    def update_useful_name(self):
+        self._useful_name = self._get_useful_object_name()
+
     def get_useful_object_name(self):
+        return self._useful_name
+
+    def _get_useful_object_name(self):
         if self.object_type == "{item}":
             itemdata = self._object_data[0]
             subtype = itemdata[0]
@@ -486,7 +499,6 @@ class PikminObject(object):
                     return "Paper Bag"+suffix
                 else:
                     return "Invalid dwfl"
-
 
             return self.object_type+subtype
 
