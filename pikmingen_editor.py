@@ -40,7 +40,7 @@ class GenEditor(QMainWindow):
             self.configuration = make_default_config()
 
         self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
-        self.pikmin_gen_view.editorconfig = self.configuration["gen editor"]
+        self.pikmin_gen_view.set_editorconfig(self.configuration["gen editor"])
 
         self.pathsconfig = self.configuration["default paths"]
         self.editorconfig = self.configuration["gen editor"]
@@ -234,7 +234,8 @@ class GenEditor(QMainWindow):
                     self.pikmin_gen_file.from_file(f)
 
                     self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
-                    self.pikmin_gen_view.update()
+                    #self.pikmin_gen_view.update()
+                    self.pikmin_gen_view.do_redraw()
 
                     print("File loaded")
                     # self.bw_map_screen.update()
@@ -369,7 +370,8 @@ class GenEditor(QMainWindow):
         self.pikmin_gen_file.startpos_z = pos[2]
         self.pikmin_gen_file.startdir = direction
 
-        self.pikmin_gen_view.update()
+        #self.pikmin_gen_view.update()
+        self.pikmin_gen_view.do_redraw()
 
     def button_open_add_item_window(self):
         if self.add_object_window is None:
@@ -423,7 +425,8 @@ class GenEditor(QMainWindow):
                 newobj.offset_y = 0
 
         self.pikmin_gen_file.objects.append(newobj)
-        self.pikmin_gen_view.update()
+        #self.pikmin_gen_view.update()
+        self.pikmin_gen_view.do_redraw()
 
         self.history.add_history_addobject(newobj)
 
@@ -468,7 +471,8 @@ class GenEditor(QMainWindow):
             obj = self.pikmin_gen_view.selected[0]
             self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
 
-        self.pikmin_gen_view.update()
+        #self.pikmin_gen_view.update()
+        self.pikmin_gen_view.do_redraw()
 
     def keyPressEvent(self, event: QtGui.QKeyEvent):
         if event.key() == Qt.Key_Shift:
@@ -476,17 +480,41 @@ class GenEditor(QMainWindow):
         elif event.key() == Qt.Key_R:
             self.pikmin_gen_view.rotation_is_pressed = True
 
+        if event.key() == Qt.Key_W:
+            self.pikmin_gen_view.MOVE_UP = 1
+        elif event.key() == Qt.Key_S:
+            self.pikmin_gen_view.MOVE_DOWN = 1
+        elif event.key() == Qt.Key_A:
+            self.pikmin_gen_view.MOVE_LEFT = 1
+        elif event.key() == Qt.Key_D:
+            self.pikmin_gen_view.MOVE_RIGHT = 1
+
+        if event.key() == Qt.Key_Plus:
+            self.pikmin_gen_view.zoom_in()
+        elif event.key() == Qt.Key_Minus:
+            self.pikmin_gen_view.zoom_out()
+
     def keyReleaseEvent(self, event: QtGui.QKeyEvent):
         if event.key() == Qt.Key_Shift:
             self.pikmin_gen_view.shift_is_pressed = False
         elif event.key() == Qt.Key_R:
             self.pikmin_gen_view.rotation_is_pressed = False
 
+        if event.key() == Qt.Key_W:
+            self.pikmin_gen_view.MOVE_UP = 0
+        elif event.key() == Qt.Key_S:
+            self.pikmin_gen_view.MOVE_DOWN = 0
+        elif event.key() == Qt.Key_A:
+            self.pikmin_gen_view.MOVE_LEFT = 0
+        elif event.key() == Qt.Key_D:
+            self.pikmin_gen_view.MOVE_RIGHT = 0
+
     def action_rotate_object(self, obj, angle):
         obj.set_rotation((None, angle, None))
         self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
 
-        self.pikmin_gen_view.update()
+        #self.pikmin_gen_view.update()
+        self.pikmin_gen_view.do_redraw()
 
     def action_ground_objects(self):
         for obj in self.pikmin_gen_view.selected:
@@ -514,7 +542,8 @@ class GenEditor(QMainWindow):
         self.pikmin_gen_view.selected = []
 
         self.pik_control.reset_info()
-        self.pikmin_gen_view.update()
+        #self.pikmin_gen_view.update()
+        self.pikmin_gen_view.do_redraw()
         self.history.add_history_removeobjects(tobedeleted)
 
     @catch_exception
@@ -538,13 +567,15 @@ class GenEditor(QMainWindow):
             if obj in self.pikmin_gen_view.selected:
                 self.pikmin_gen_view.selected.remove(obj)
 
-            self.pikmin_gen_view.update()
+            #self.pikmin_gen_view.update()
+            self.pikmin_gen_view.do_redraw()
 
         if action == "RemoveObjects":
             for obj in val:
                 self.pikmin_gen_file.objects.append(obj)
 
-            self.pikmin_gen_view.update()
+            #self.pikmin_gen_view.update()
+            self.pikmin_gen_view.do_redraw()
 
     @catch_exception
     def action_redo(self):
@@ -558,7 +589,8 @@ class GenEditor(QMainWindow):
             obj = val
             self.pikmin_gen_file.objects.append(obj)
 
-            self.pikmin_gen_view.update()
+            #self.pikmin_gen_view.update()
+            self.pikmin_gen_view.do_redraw()
 
         if action == "RemoveObjects":
             for obj in val:
@@ -574,7 +606,8 @@ class GenEditor(QMainWindow):
                 if obj in self.pikmin_gen_view.selected:
                     self.pikmin_gen_view.selected.remove(obj)
 
-            self.pikmin_gen_view.update()
+            #self.pikmin_gen_view.update()
+            self.pikmin_gen_view.do_redraw()
 
     def create_field_edit_action(self, fieldname):
         attribute = "lineedit_"+fieldname
@@ -606,7 +639,8 @@ class GenEditor(QMainWindow):
                             elif coord == "z": pikobject.set_rotation((None, None, val))
                         elif pikobject.object_type == "{teki}":
                             pikobject.set_rotation((None, val, None))
-                    self.pikmin_gen_view.update()
+                    #self.pikmin_gen_view.update()
+                    self.pikmin_gen_view.do_redraw()
 
         return change_field
 
@@ -630,7 +664,8 @@ class GenEditor(QMainWindow):
                             self.pik_control.set_info(currentobj,
                                                       (currentobj.x, currentobj.y, currentobj.z),
                                                       currentobj.get_rotation())
-                            self.pikmin_gen_view.update()
+                            #self.pikmin_gen_view.update()
+                            self.pikmin_gen_view.do_redraw()
 
                     def action_close_edit_window():
                         self.editing_windows[currentobj].destroy()

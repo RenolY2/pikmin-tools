@@ -9,6 +9,7 @@ from PyQt5.QtGui import QMouseEvent, QWheelEvent, QPainter, QColor, QFont, QFont
 from PyQt5.QtWidgets import (QWidget, QListWidget, QListWidgetItem, QDialog, QMenu, QLineEdit,
                             QMdiSubWindow, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit, QAction, QShortcut)
 import PyQt5.QtWidgets as QtWidgets
+import PyQt5.QtCore as QtCore
 from PyQt5.QtCore import QSize, pyqtSignal, QPoint, QRect
 from PyQt5.QtCore import Qt
 import PyQt5.QtGui as QtGui
@@ -161,6 +162,86 @@ class GenMapViewer(QWidget):
         self.rotation_is_pressed = False
         self.last_drag_update = 0
 
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(2)
+        self.timer.timeout.connect(self.render_loop)
+        self.timer.start()
+        self._lastrendertime = 0
+        self._lasttime = 0
+
+        self._frame_invalid = False
+
+        self.MOVE_UP = 0
+        self.MOVE_DOWN = 0
+        self.MOVE_LEFT = 0
+        self.MOVE_RIGHT = 0
+        self.SPEEDUP = 0
+
+        self._wasdscrolling_speed = 1
+        self._wasdscrolling_speedupfactor = 3
+
+    @catch_exception
+    def set_editorconfig(self, config):
+        self.editorconfig = config
+        self._wasdscrolling_speed = config.getfloat("wasdscrolling_speed")
+        self._wasdscrolling_speedupfactor = config.getfloat("wasdscrolling_speedupfactor")
+
+    @catch_exception
+    def render_loop(self):
+        now = default_timer()
+
+        diff = now-self._lastrendertime
+        timedelta = now-self._lasttime
+        self.handle_arrowkey_scroll(timedelta)
+        if diff > 1 / 60.0:
+            if self._frame_invalid:
+                self.update()
+                self._lastrendertime = now
+                self._frame_invalid = False
+        self._lasttime = now
+
+    def handle_arrowkey_scroll(self, timedelta):
+        diff_x = diff_y = 0
+        #print(self.MOVE_UP, self.MOVE_DOWN, self.MOVE_LEFT, self.MOVE_RIGHT)
+        speedup = 1
+
+        if self.shift_is_pressed:
+            speedup = self._wasdscrolling_speedupfactor
+
+        if self.MOVE_UP == 1 and self.MOVE_DOWN == 1:
+            diff_y = 0
+        elif self.MOVE_UP == 1:
+            diff_y = 1*speedup*self._wasdscrolling_speed*timedelta
+        elif self.MOVE_DOWN == 1:
+            diff_y = -1*speedup*self._wasdscrolling_speed*timedelta
+
+        if self.MOVE_LEFT == 1 and self.MOVE_RIGHT == 1:
+            diff_x = 0
+        elif self.MOVE_LEFT == 1:
+            diff_x = 1*speedup*self._wasdscrolling_speed*timedelta
+        elif self.MOVE_RIGHT == 1:
+            diff_x = -1*speedup*self._wasdscrolling_speed*timedelta
+
+        if diff_x != 0 or diff_y != 0:
+            if self.zoom_factor > 1.0:
+                self.offset_x += diff_x * (1.0 + (self.zoom_factor - 1.0) / 2.0)
+                self.offset_z += diff_y * (1.0 + (self.zoom_factor - 1.0) / 2.0)
+            else:
+                self.offset_x += diff_x
+                self.offset_z += diff_y
+            # self.update()
+
+            self.do_redraw()
+
+    def set_arrowkey_movement(self, up, down, left, right):
+        self.MOVE_UP = up
+        self.MOVE_DOWN = down
+        self.MOVE_LEFT = left
+        self.MOVE_RIGHT = right
+
+    def do_redraw(self):
+        self._frame_invalid = True
+
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
 
@@ -224,7 +305,8 @@ class GenMapViewer(QWidget):
     def zoom(self, fac):
         if 0.1 < (self.zoom_factor + fac) <= 25:
             self._zoom_factor += int(fac*10)
-            self.update()
+            #self.update()
+            self.do_redraw()
 
     #@catch_exception_with_dialog
     def paintEvent(self, event):
@@ -596,7 +678,8 @@ class GenMapViewer(QWidget):
                     #    self.connect_update.emit(self.connect_first_wp, wp_index)
                     #self.connect_first_wp = wp_index
                     #self.move_startpos = [wp_index]
-                    self.update()
+                    #self.update()
+                    self.do_redraw()
                     self.overlapping_wp_index = (self.overlapping_wp_index+1)%len(all_hit_waypoints)
 
                 if not hit:
@@ -605,7 +688,8 @@ class GenMapViewer(QWidget):
                     self.select_update.emit(event)
                     self.connect_first_wp = None
                     self.move_startpos = []
-                    self.update()
+                    #self.update()
+                    self.do_redraw()
 
         if event.buttons() & Qt.MiddleButton and not self.mid_button_down:
             self.mid_button_down = True
@@ -698,7 +782,8 @@ class GenMapViewer(QWidget):
                 self.offset_x += d_x
                 self.offset_z += d_y
             self.drag_last_pos = (event.x(), event.y())
-            self.update()
+            # self.update()
+            self.do_redraw()
 
         if self.left_button_down:
             # -----------------------
@@ -782,7 +867,7 @@ class GenMapViewer(QWidget):
                 if changed:
                     self.select_update.emit(event)
 
-            self.update()
+            self.do_redraw()
 
         if self.right_button_down:
             if self.mousemode == MOUSE_MODE_MOVEWP:
@@ -846,11 +931,13 @@ class GenMapViewer(QWidget):
             #print("releasing left")
             self.left_button_down = False
             self.selectionbox_start = self.selectionbox_end = None
-            self.update()
+            # self.update()
+            self.do_redraw()
         if not event.buttons() & Qt.RightButton and self.right_button_down:
             #print("releasing right")
             self.right_button_down = False
-            self.update()
+            # self.update()
+            self.do_redraw()
         #self.mouse_released.emit(event)
 
     def wheelEvent(self, event):
@@ -862,19 +949,23 @@ class GenMapViewer(QWidget):
                 wheel_delta = -1*wheel_delta
 
         if wheel_delta < 0:
-            current = self.zoom_factor
-            fac = calc_zoom_in_factor(current)
-
-            self.zoom(fac)
+            self.zoom_out()
 
         elif wheel_delta > 0:
-            current = self.zoom_factor
+            self.zoom_in()
 
-            fac = calc_zoom_out_factor(current)
+    def zoom_in(self):
+        current = self.zoom_factor
 
-            self.zoom(fac)
+        fac = calc_zoom_out_factor(current)
 
-        #self.mouse_wheel.emit(event)
+        self.zoom(fac)
+
+    def zoom_out(self):
+        current = self.zoom_factor
+        fac = calc_zoom_in_factor(current)
+
+        self.zoom(fac)
 
 
 class PikminSideWidget(QWidget):

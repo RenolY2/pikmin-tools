@@ -29,7 +29,9 @@ def make_default_config():
         "InvertZoom": "False",
         "GroundObjectsWhenMoving": "False",
         "GroundObjectsWhenAdding": "True",
-        "renderStartPos": "False"
+        "renderStartPos": "False",
+        "wasdscrolling_speed": "200",
+        "wasdscrolling_speedupfactor": "3"
     }
     cfg["model render"] = {
         "Width": "1000",
