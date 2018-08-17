@@ -81,6 +81,10 @@ def decompress(f, out):
                 data = file_read(2)
                 infobyte = data[0] << 8 | data[1]
                 
+                if file_tell() >= maxsize-1:
+                    eof = True
+                    break
+                
                 bytecount = infobyte >> 12 
                 
                 if bytecount == 0:

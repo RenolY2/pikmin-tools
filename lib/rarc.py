@@ -15,8 +15,8 @@ def write_pad32(f):
     next_aligned_pos = (f.tell() + 0x1F) & ~0x1F
 
     f.write(b"\x00"*(next_aligned_pos - f.tell()))
-    print(hex(f.tell()))
-    print(hex(next_aligned_pos))
+    #print(hex(f.tell()))
+    #print(hex(next_aligned_pos))
 
 DATA = [0]
 
@@ -103,17 +103,17 @@ class Directory(object):
         #print(dirname, path)
         dir = cls(dirname)
 
-        with os.scandir(path) as entries:
-            for entry in entries:
-                #print(entry.path, dirname)
-                if entry.is_dir(follow_symlinks=follow_symlinks):
-                    newdir = Directory.from_dir(entry.path, follow_symlinks=follow_symlinks)
-                    dir.subdirs[entry.name] = newdir
+        #with os.scandir(path) as entries: <- not supported in versions earlier than 3.6 apparently
+        for entry in os.scandir(path):
+            #print(entry.path, dirname)
+            if entry.is_dir(follow_symlinks=follow_symlinks):
+                newdir = Directory.from_dir(entry.path, follow_symlinks=follow_symlinks)
+                dir.subdirs[entry.name] = newdir
 
-                elif entry.is_file(follow_symlinks=follow_symlinks):
-                    with open(entry.path, "rb") as f:
-                        file = File.from_file(entry.name, f)
-                    dir.files[entry.name] = file
+            elif entry.is_file(follow_symlinks=follow_symlinks):
+                with open(entry.path, "rb") as f:
+                    file = File.from_file(entry.name, f)
+                dir.files[entry.name] = file
 
         return dir
 
@@ -124,6 +124,8 @@ class Directory(object):
         #print("=============================")
         #print("Creating new node with index", currentnodeindex)
         name, unknown, entrycount, entryoffset = nodelist[currentnodeindex]
+        if name is None:
+            name = _name 
 
         newdir = cls(name, currentnodeindex)
 
@@ -349,15 +351,20 @@ class Archive(object):
         nodes = []
 
         print("Archive has", node_count, " total directories")
+
+                
+        
         #print("data offset", hex(data_offset))
         for i in range(node_count):
             nodetype = f.read(4)
             nodedata = f.read(4+2+2+4)
             nameoffset, unknown, entrycount, entryoffset = unpack(">IHHI", nodedata)
 
-            dir_name = stringtable_get_name(f, stringtable_offset, nameoffset)
-            #print(unknown, dir_name, hash_name(dir_name))
-            #print(dir_name, hex(stringtable_offset), hex(nameoffset))
+            if i == 0:
+                dir_name = stringtable_get_name(f, stringtable_offset, nameoffset)
+            else:
+                dir_name = None 
+                
             nodes.append((dir_name, unknown, entrycount, entryoffset))
 
         rootfoldername = nodes[0][0]
@@ -597,18 +604,34 @@ if __name__ == "__main__":
         path, name = os.path.split(inputpath)
 
         if dir2arc:
-            #inputdir = os.listdir(inputpath)[0]
             if args.yaz0fast:
-                outputpath = inputpath+".szs"
+                ending = ".szs"
             else:
-                outputpath = inputpath+".arc"
+                ending = ".arc"
+            
+            if inputpath.endswith("_ext"):
+                outputpath = inputpath[:-4]
+            else:
+                outputpath = inputpath + ending 
         else:
-            outputpath = os.path.join(path, name+" Dir")
+            outputpath = os.path.join(path, name+"_ext")
     else:
         outputpath = args.output
 
     if dir2arc:
-        inputdir = os.listdir(inputpath)[0]
+        dirscan = os.scandir(inputpath)
+        inputdir = None 
+        
+        for entry in dirscan:
+            if entry.is_dir():
+                if inputdir is None:
+                    inputdir = entry.name
+                else:
+                    raise RuntimeError("Directory {0} contains multiple folders! Only one folder should exist.".format(inputpath))
+        
+        if inputdir is None:
+            raise RuntimeError("Directory {0} contains no folders! Exactly one folder should exist.".format(inputpath))
+        
         print("Packing directory to archive")
         archive = Archive.from_dir(os.path.join(inputpath, inputdir))
         print("Directory loaded into memory, writing archive now")
@@ -618,7 +641,7 @@ if __name__ == "__main__":
                 archive.write_arc_compressed(f)
             else:
                 archive.write_arc(f)
-        print("done")
+        print("Done")
     else:
         print("Extracting archive to directory")
         with open(inputpath, "rb") as f:
