@@ -54,6 +54,11 @@ class GenEditor(QMainWindow):
         self.history = EditorHistory(20)
         self.edit_spawn_window = None
 
+        self._window_title = ""
+        self._user_made_change = False
+        self._justupdatingselectedobject = False
+
+
     @catch_exception
     def reset(self):
         self.history.reset()
@@ -78,11 +83,36 @@ class GenEditor(QMainWindow):
         self.pik_control.reset_info()
         self.pik_control.button_add_object.setChecked(False)
         self.pik_control.button_move_object.setChecked(False)
+        self._window_title = ""
+        self._user_made_change = False
+
+    def set_base_window_title(self, name):
+        self._window_title = name
+        if name != "":
+            self.setWindowTitle("Pikmin 2 Generators Editor - "+name)
+        else:
+            self.setWindowTitle("Pikmin 2 Generators Editor")
+
+    def set_has_unsaved_changes(self, hasunsavedchanges):
+        if hasunsavedchanges and not self._user_made_change:
+            self._user_made_change = True
+
+            if self._window_title != "":
+                self.setWindowTitle("Pikmin 2 Generators Editor [Unsaved Changes] - " + self._window_title)
+            else:
+                self.setWindowTitle("Pikmin 2 Generators Editor [Unsaved Changes] ")
+        elif not hasunsavedchanges and self._user_made_change:
+            self._user_made_change = False
+            if self._window_title != "":
+                self.setWindowTitle("Pikmin 2 Generators Editor - " + self._window_title)
+            else:
+                self.setWindowTitle("Pikmin 2 Generators Editor")
 
     def setup_ui(self):
         self.resize(1000, 800)
         #self.setMinimumSize(QSize(930, 850))
-        self.setWindowTitle("Pikmin 2 Generators Editor")
+        #self.setWindowTitle("Pikmin 2 Generators Editor")
+        self.set_base_window_title("")
 
         self.setup_ui_menubar()
         self.setup_ui_toolbar()
@@ -119,11 +149,15 @@ class GenEditor(QMainWindow):
 
         save_file_shortcut = QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self.file_menu)
         save_file_shortcut.activated.connect(self.button_save_level)
+        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_O, self.file_menu).activated.connect(self.button_load_level)
+        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_Alt + Qt.Key_S, self.file_menu).activated.connect(self.button_save_level_as)
 
         self.file_load_action = QAction("Load", self)
         self.save_file_action = QAction("Save", self)
         self.save_file_as_action = QAction("Save As", self)
         self.save_file_action.setShortcut("Ctrl+S")
+        self.file_load_action.setShortcut("Ctrl+O")
+        self.save_file_as_action.setShortcut("Ctrl+Alt+S")
 
         self.file_load_action.triggered.connect(self.button_load_level)
         self.save_file_action.triggered.connect(self.button_save_level)
@@ -240,7 +274,7 @@ class GenEditor(QMainWindow):
                     print("File loaded")
                     # self.bw_map_screen.update()
                     # path_parts = path.split(filepath)
-                    self.setWindowTitle("Pikmin 2 Generators Editor - {0}".format(filepath))
+                    self.set_base_window_title(filepath)
                     self.pathsconfig["gen"] = filepath
                     save_cfg(self.configuration)
                     self.current_gen_path = filepath
@@ -255,6 +289,7 @@ class GenEditor(QMainWindow):
             with open(self.current_gen_path, "w", encoding="shift-jis-2004", errors="backslashreplace") as f:
                 try:
                     self.pikmin_gen_file.write(f)
+                    self.set_has_unsaved_changes(False)
                 except Exception as error:
                     print("Error appeared while saving:", error)
                     traceback.print_exc()
@@ -273,10 +308,11 @@ class GenEditor(QMainWindow):
             with open(filepath, "w", encoding="shift-jis-2004", errors="backslashreplace") as f:
                 try:
                     self.pikmin_gen_file.write(f)
-                    self.setWindowTitle("Pikmin 2 Generators Editor - {0}".format(filepath))
+                    self.set_base_window_title(filepath)
                     self.pathsconfig["gen"] = filepath
                     save_cfg(self.configuration)
                     self.current_gen_path = filepath
+                    self.set_has_unsaved_changes(False)
 
                 except Exception as error:
                     print("Error appeared while saving:", error)
@@ -372,6 +408,7 @@ class GenEditor(QMainWindow):
 
         #self.pikmin_gen_view.update()
         self.pikmin_gen_view.do_redraw()
+        self.set_has_unsaved_changes(True)
 
     def button_open_add_item_window(self):
         if self.add_object_window is None:
@@ -403,6 +440,7 @@ class GenEditor(QMainWindow):
                 self.add_object_window = None
                 self.pikmin_gen_view.setContextMenuPolicy(Qt.DefaultContextMenu)
 
+
     @catch_exception
     def button_add_item_window_close(self):
         # self.add_object_window.destroy()
@@ -429,6 +467,7 @@ class GenEditor(QMainWindow):
         self.pikmin_gen_view.do_redraw()
 
         self.history.add_history_addobject(newobj)
+        self.set_has_unsaved_changes(True)
 
     def button_move_objects(self):
         if self.pikmin_gen_view.mousemode == pikwidgets.MOUSE_MODE_MOVEWP:
@@ -473,6 +512,7 @@ class GenEditor(QMainWindow):
 
         #self.pikmin_gen_view.update()
         self.pikmin_gen_view.do_redraw()
+        self.set_has_unsaved_changes(True)
 
     def keyPressEvent(self, event: QtGui.QKeyEvent):
         if event.key() == Qt.Key_Shift:
@@ -515,6 +555,7 @@ class GenEditor(QMainWindow):
 
         #self.pikmin_gen_view.update()
         self.pikmin_gen_view.do_redraw()
+        self.set_has_unsaved_changes(True)
 
     def action_ground_objects(self):
         for obj in self.pikmin_gen_view.selected:
@@ -529,6 +570,7 @@ class GenEditor(QMainWindow):
         if len(self.pikmin_gen_view.selected) == 1:
             obj = self.pikmin_gen_view.selected[0]
             self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
+        self.set_has_unsaved_changes(True)
 
     def action_delete_objects(self):
         tobedeleted = []
@@ -545,6 +587,7 @@ class GenEditor(QMainWindow):
         #self.pikmin_gen_view.update()
         self.pikmin_gen_view.do_redraw()
         self.history.add_history_removeobjects(tobedeleted)
+        self.set_has_unsaved_changes(True)
 
     @catch_exception
     def action_undo(self):
@@ -576,6 +619,7 @@ class GenEditor(QMainWindow):
 
             #self.pikmin_gen_view.update()
             self.pikmin_gen_view.do_redraw()
+        self.set_has_unsaved_changes(True)
 
     @catch_exception
     def action_redo(self):
@@ -608,6 +652,7 @@ class GenEditor(QMainWindow):
 
             #self.pikmin_gen_view.update()
             self.pikmin_gen_view.do_redraw()
+        self.set_has_unsaved_changes(True)
 
     def create_field_edit_action(self, fieldname):
         attribute = "lineedit_"+fieldname
@@ -641,6 +686,8 @@ class GenEditor(QMainWindow):
                             pikobject.set_rotation((None, val, None))
                     #self.pikmin_gen_view.update()
                     self.pikmin_gen_view.do_redraw()
+                    if not self._justupdatingselectedobject:
+                        self.set_has_unsaved_changes(True)
 
         return change_field
 
@@ -667,6 +714,8 @@ class GenEditor(QMainWindow):
                             #self.pikmin_gen_view.update()
                             self.pikmin_gen_view.do_redraw()
 
+                            self.set_has_unsaved_changes(True)
+
                     def action_close_edit_window():
                         self.editing_windows[currentobj].destroy()
                         del self.editing_windows[currentobj]
@@ -682,6 +731,7 @@ class GenEditor(QMainWindow):
     def action_update_info(self, event):
         if self.pikmin_gen_file is not None:
             selected = self.pikmin_gen_view.selected
+            self._justupdatingselectedobject = True
             if len(self.pikmin_gen_view.selected) == 1:
                 currentobj = selected[0]
 
@@ -706,6 +756,7 @@ class GenEditor(QMainWindow):
 
                 self.pik_control.comment_label.setText("Selected objects:\n" + (", ".join(objectnames)))"""
                 self.pik_control.set_objectlist(self.pikmin_gen_view.selected)
+            self._justupdatingselectedobject = False
 
     @catch_exception
     def mapview_showcontextmenu(self, position):
@@ -793,10 +844,10 @@ if __name__ == "__main__":
     with open("log.txt", "w") as f:
         #sys.stdout = f
         #sys.stderr = f
+        print("Python version: ", sys.version)
         pikmin_gui = GenEditor()
         pikmin_gui.setWindowIcon(QtGui.QIcon('resources/icon.ico'))
         pikmin_gui.show()
         err_code = app.exec()
-        #traceback.print_exc()
 
     sys.exit(err_code)
