@@ -18,7 +18,7 @@ ONYN_YELLOWONION = "Yellow Onion"
 ONYN_BLUEONION = "Blue Onion"
 
 BRIDGE_SHORT = "Short Bridge"
-BRIDGE_SHORT_UP = "Short Bridge (Upwards)"
+BRIDGE_SHORT_UP = "Short Bridge (Slanted)"
 BRIDGE_LONG = "Long Bridge"
 BRIDGES = {"0": BRIDGE_SHORT,
            "1": BRIDGE_SHORT_UP,
@@ -508,9 +508,25 @@ class PikminObject(object):
                 return "Teki: "+TEKIS[identifier]
             else:
                 return "Unknown Teki: {0}".format(identifier)
+
         elif self.object_type == "{pelt}":
             mgrid = self._object_data[0][0]
             treasureid = self._object_data[0][3]
+            if mgrid == "0":
+                if isinstance(treasureid, list):
+                    pellet_type = treasureid[0]
+
+                    if pellet_type == "0":
+                        return "Blue Pellet"
+                    elif pellet_type == "1":
+                        return "Red Pellet"
+                    elif pellet_type == "2":
+                        return "Yellow Pellet"
+                    else:
+                        return "Unknown Pellet"
+                else:
+                    return "Invalid Pellet"
+
             if mgrid == "3":
                 if treasureid in TREASURES:
                     return "Treasure: "+TREASURES[treasureid]
@@ -581,7 +597,7 @@ class PikminObject(object):
         textnode.append([self.days_till_resurrection, "# Days till resurrection"])
 
         name = self.get_identifier()
-
+        argsversion = self.identifier_misc[0]
         textnode.append(list(chain(self.arguments, ["# {0}".format(name)])))
 
         textnode.append([self.position_x, self.position_y, self.position_z, "# Position"])
@@ -590,22 +606,76 @@ class PikminObject(object):
         identifier = [self.object_type]
         identifier.extend(self.identifier_misc)
         textnode.append(identifier)
+        current_progress = len(textnode)
 
-        if self.object_type == "{teki}":
-            textnode.append([self._object_data[0], "# Teki Birth Type"])
-            textnode.append([self._object_data[1], "# Teki Number"])
-            textnode.append([self._object_data[2], "# Face Direction"])
-            textnode.append([self._object_data[3], "# 0: Point, 1: Circle"])
-            textnode.append([self._object_data[4], "# appear radius"])
-            textnode.append([self._object_data[5], "# enemy size"])
-            textnode.append([self._object_data[6], "# Treasure item code"])
-            textnode.append([self._object_data[7], "# Pellet color"])
-            textnode.append([self._object_data[8], "# Pellet size"])
-            textnode.append([self._object_data[9], "# Pellet Min"])
-            textnode.append([self._object_data[10], "# Pellet Max"])
-            textnode.append([self._object_data[11], "# Pellet Min"])
-            textnode.extend(self._object_data[12:])
-        else:
+        try:
+            if self.object_type == "{teki}" and argsversion == "{0005}":
+                textnode.append([self._object_data[0], "# Teki Birth Type"])
+                textnode.append([self._object_data[1], "# Teki Number"])
+                textnode.append([self._object_data[2], "# Face Direction"])
+                textnode.append([self._object_data[3], "# 0: Point, 1: Circle"])
+                textnode.append([self._object_data[4], "# appear radius"])
+                textnode.append([self._object_data[5], "# enemy size"])
+                textnode.append([self._object_data[6], "# Treasure item code"])
+                textnode.append([self._object_data[7], "# Pellet color"])
+                textnode.append([self._object_data[8], "# Pellet size"])
+                textnode.append([self._object_data[9], "# Pellet Min"])
+                textnode.append([self._object_data[10], "# Pellet Max"])
+                textnode.append([self._object_data[11], "# Pellet Min"])
+                textnode.extend(self._object_data[12:])
+
+            elif self.object_type == "{item}":
+                itemdata = self._object_data[0]
+                itemid = itemdata[0].strip()
+                newitemdata = TextNode()
+                newitemdata.append([itemid, "# Item ID"])
+                newitemdata.append([itemdata[1][0],itemdata[1][1], itemdata[1][2],  "# rotation"])
+                newitemdata.append([itemdata[2], "# item local version"])
+                print("hey", itemid)
+                if itemid == "{dwfl}":
+                    newitemdata.append([itemdata[3], "# Required pikmin count for weighting down the downfloor (if behaviour=0)"])
+                    newitemdata.append([itemdata[4], "# Type: 0=small block, 1=large block, 2=paper bag"])
+                    newitemdata.append([itemdata[5], "# Behaviour: 0=normal, 1=seesaw"])
+                    newitemdata.append([itemdata[6],
+                                        "# ID of this downfloor. If set to seesaw, there needs to be another dwfl with same ID."])
+                elif itemid == "{brdg}":
+                    newitemdata.append([itemdata[3], "# Bridge type: 0=short, 1=slanted, 2=long"])
+                elif itemid == "{dgat}":
+                    newitemdata.append([itemdata[3], "# Gate Health"])
+                elif itemid == "{gate}":
+                    newitemdata.append([itemdata[3], "# Gate Health"])
+                    newitemdata.append([itemdata[4], "# Color: 0=bright, 1=dark"])
+                elif itemid == "{onyn}":
+                    newitemdata.append([itemdata[3], "# Onion type: 0=blue, 1=red, 2=yellow, 4=rocket"])
+                    newitemdata.append([itemdata[4], "# after boot? true==1"])
+                else:
+                    if len(itemdata) > 2:
+                        newitemdata.extend(itemdata[3:])
+
+                textnode.append(newitemdata)
+                if len(self._object_data) > 1:
+                    textnode.extend(self._object_data[1:])
+            elif self.object_type == "{pelt}":
+                pelt_data = self._object_data[0]
+                new_pelt = TextNode()
+                mgrid = pelt_data[0]
+                new_pelt.append([mgrid, "# Treasure category: 3=regular, 4=exploration kit"])
+                new_pelt.append([pelt_data[1][0], pelt_data[1][1], pelt_data[1][2], "# Rotation"])
+                new_pelt.append([pelt_data[2], "# Local version"])
+                if mgrid == "0":
+                    tmp = []
+                    tmp.extend(pelt_data[3])
+                    new_pelt.append([pelt_data[3][0], pelt_data[3][1], "# Pellet type (0,1,2 = B,R,Y respectively) and pellet size (1,5,10,20)"])
+                else:
+                    new_pelt.append([pelt_data[3], "# Identifier of treasure, see https://pikmintkb.com/wiki/Pikmin_2_identifiers	"])
+                textnode.append(new_pelt)
+                if len(self._object_data) > 1:
+                    textnode.extend(self._object_data[1:])
+            else:
+                textnode.extend(self._object_data)
+        except Exception as e:
+            print(e)
+            textnode = textnode[:current_progress]
             textnode.extend(self._object_data)
 
         return textnode
