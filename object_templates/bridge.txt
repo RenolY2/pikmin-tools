@@ -11,7 +11,7 @@
 		{brdg} 	# item id
 		0.000000 35.000000 0.000000 	# rotation
 		{0001} 	# item local version
-		1	#橋タイプ
+		1	# Bridge type: 0 = short, 1 = slanted, 2 = long
 	}
 	# gen base
 	{
