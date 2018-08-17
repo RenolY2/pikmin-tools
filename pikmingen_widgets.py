@@ -260,11 +260,6 @@ class GenMapViewer(QWidget):
         self.origin_z = self.SIZEY//2
         self.last_drag_update = 0
 
-        self.offset_x = 0
-        self.offset_z = 0
-
-        self._zoom_factor = 10
-
         self.left_button_down = False
         self.mid_button_down = False
         self.right_button_down = False
@@ -278,12 +273,23 @@ class GenMapViewer(QWidget):
         if not keep_collision:
             # Potentially: Clear collision object too?
             self.level_image = None
+            self.offset_x = 0
+            self.offset_z = 0
+            self._zoom_factor = 10
 
         self.pikmin_generators = None
 
         self.mousemode = MOUSE_MODE_NONE
         self.spawnpoint = None
         self.rotation_is_pressed = False
+
+        self._frame_invalid = False
+
+        self.MOVE_UP = 0
+        self.MOVE_DOWN = 0
+        self.MOVE_LEFT = 0
+        self.MOVE_RIGHT = 0
+        self.SPEEDUP = 0
 
     def set_collision(self, verts, faces):
         self.collision = Collision(verts, faces)
