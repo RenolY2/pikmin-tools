@@ -332,6 +332,9 @@ EXPKIT_TREASURES = {
     "12": "The Key"
 }
 
+def assert_notlist(val):
+    assert not isinstance(val, list)
+
 class PikminObject(object):
     def __init__(self):
         self.version = "{v0.3}"
@@ -353,7 +356,6 @@ class PikminObject(object):
 
         self._useful_name = "None"
 
-
     def from_text(self, text):
         node = libpiktxt.PikminTxt()
         node.from_text(text)
@@ -373,6 +375,10 @@ class PikminObject(object):
                 break
 
         self.set_preceeding_comment(comments)
+        if self.get_rotation() is not None:
+            self._horizontal_rotation = float(self.get_rotation()[1])
+        else:
+            self._horizontal_rotation = None
         self.update_useful_name()
 
     def from_textnode(self, textnode):
@@ -499,6 +505,19 @@ class PikminObject(object):
                     return "Paper Bag"+suffix
                 else:
                     return "Invalid dwfl"
+            elif subtype == "{plnt}":
+                name = "Burg. Spiderwort"
+                planttype = itemdata[3]
+                if planttype == "0":
+                    name += " (Red Berry)"
+                elif planttype == "1":
+                    name += " (Purple Berry)"
+                elif planttype == "2":
+                    name += " (Mixed)"
+                else:
+                    name += " (Invalid)"
+
+                return name
 
             return self.object_type+subtype
 
@@ -511,8 +530,9 @@ class PikminObject(object):
 
         elif self.object_type == "{pelt}":
             mgrid = self._object_data[0][0]
-            treasureid = self._object_data[0][3]
+
             if mgrid == "0":
+                treasureid = self._object_data[0][3]
                 if isinstance(treasureid, list):
                     pellet_type = treasureid[0]
 
@@ -528,11 +548,13 @@ class PikminObject(object):
                     return "Invalid Pellet"
 
             if mgrid == "3":
+                treasureid = self._object_data[0][3]
                 if treasureid in TREASURES:
                     return "Treasure: "+TREASURES[treasureid]
                 else:
                     return "Unknown treasure: {0}".format(treasureid)
             elif mgrid == "4":
+                treasureid = self._object_data[0][3]
                 if treasureid in EXPKIT_TREASURES:
                     return "ExpKit Treasure: "+EXPKIT_TREASURES[treasureid]
                 else:
@@ -578,7 +600,7 @@ class PikminObject(object):
 
     def get_identifier(self):
         try:
-            name = pack(32 * "B", *self.arguments).strip(b"\x00")
+            name = pack(32 * "B", *self.arguments).split(b"\x00")[0]
             name = name.decode("shift_jis-2004", errors="backslashreplace")
         except:
             name = "<failed to decode identifier>"
@@ -591,10 +613,22 @@ class PikminObject(object):
         #for comment in self.preceeding_comment:
         #    assert comment.startswith("#")
         #    textnode.append([comment.strip()])
+        current_progress = 0
 
-        textnode.append([self.version, "# Version"])
-        textnode.append([self.reserved, "# Reserved"])
-        textnode.append([self.days_till_resurrection, "# Days till resurrection"])
+        try:
+            assert_notlist(self.version)
+            assert_notlist(self.reserved)
+            assert_notlist(self.days_till_resurrection)
+        except:
+            textnode.append(self.version)
+            textnode.append(self.reserved)
+            textnode.append(self.days_till_resurrection)
+        else:
+            textnode.append([self.version, "# Version"])
+            textnode.append([self.reserved, "# Reserved"])
+            textnode.append([self.days_till_resurrection, "# Days till resurrection"])
+
+        #current_progress = len(textnode)
 
         name = self.get_identifier()
         argsversion = self.identifier_misc[0]
@@ -602,14 +636,20 @@ class PikminObject(object):
 
         textnode.append([self.position_x, self.position_y, self.position_z, "# Position"])
         textnode.append([self.offset_x, self.offset_y, self.offset_z, "# Offset"])
-
-        identifier = [self.object_type]
+        current_progress = len(textnode)
+        if isinstance(self.object_type, list):
+            identifier = []
+            identifier.extend(self.object_type)
+        else:
+            identifier = [self.object_type]
         identifier.extend(self.identifier_misc)
         textnode.append(identifier)
         current_progress = len(textnode)
 
         try:
             if self.object_type == "{teki}" and argsversion == "{0005}":
+                for i in range(12):
+                    assert_notlist(self._object_data[i])
                 textnode.append([self._object_data[0], "# Teki Birth Type"])
                 textnode.append([self._object_data[1], "# Teki Number"])
                 textnode.append([self._object_data[2], "# Face Direction"])
@@ -631,23 +671,34 @@ class PikminObject(object):
                 newitemdata.append([itemid, "# Item ID"])
                 newitemdata.append([itemdata[1][0],itemdata[1][1], itemdata[1][2],  "# rotation"])
                 newitemdata.append([itemdata[2], "# item local version"])
-                print("hey", itemid)
+                assert_notlist(itemdata[2])
+
                 if itemid == "{dwfl}":
+                    for i in range(3, 7): assert_notlist(itemdata[i])
                     newitemdata.append([itemdata[3], "# Required pikmin count for weighting down the downfloor (if behaviour=0)"])
                     newitemdata.append([itemdata[4], "# Type: 0=small block, 1=large block, 2=paper bag"])
                     newitemdata.append([itemdata[5], "# Behaviour: 0=normal, 1=seesaw"])
                     newitemdata.append([itemdata[6],
                                         "# ID of this downfloor. If set to seesaw, there needs to be another dwfl with same ID."])
                 elif itemid == "{brdg}":
+                    assert_notlist(itemdata[3])
                     newitemdata.append([itemdata[3], "# Bridge type: 0=short, 1=slanted, 2=long"])
                 elif itemid == "{dgat}":
+                    assert_notlist(itemdata[3])
                     newitemdata.append([itemdata[3], "# Gate Health"])
                 elif itemid == "{gate}":
+                    assert_notlist(itemdata[3])
+                    assert_notlist(itemdata[4])
                     newitemdata.append([itemdata[3], "# Gate Health"])
                     newitemdata.append([itemdata[4], "# Color: 0=bright, 1=dark"])
                 elif itemid == "{onyn}":
+                    assert_notlist(itemdata[3])
+                    assert_notlist(itemdata[4])
                     newitemdata.append([itemdata[3], "# Onion type: 0=blue, 1=red, 2=yellow, 4=rocket"])
                     newitemdata.append([itemdata[4], "# after boot? true==1"])
+                elif itemid == "{plnt}":
+                    assert_notlist(itemdata[3])
+                    newitemdata.append([itemdata[3], "# Berry type: 0=Red, 1=purple, 2=mixed"])
                 else:
                     if len(itemdata) > 2:
                         newitemdata.extend(itemdata[3:])
@@ -655,19 +706,27 @@ class PikminObject(object):
                 textnode.append(newitemdata)
                 if len(self._object_data) > 1:
                     textnode.extend(self._object_data[1:])
+
             elif self.object_type == "{pelt}":
                 pelt_data = self._object_data[0]
                 new_pelt = TextNode()
                 mgrid = pelt_data[0]
-                new_pelt.append([mgrid, "# Treasure category: 3=regular, 4=exploration kit"])
+                assert_notlist(mgrid)
+                assert_notlist(pelt_data[2])
+                if mgrid == "0":
+                    new_pelt.append([mgrid, "# Pellet"])
+                else:
+                    new_pelt.append([mgrid, "# Treasure category: 3=regular, 4=exploration kit"])
                 new_pelt.append([pelt_data[1][0], pelt_data[1][1], pelt_data[1][2], "# Rotation"])
                 new_pelt.append([pelt_data[2], "# Local version"])
                 if mgrid == "0":
-                    tmp = []
-                    tmp.extend(pelt_data[3])
+                    #tmp = []
+                    #tmp.extend(pelt_data[3])
                     new_pelt.append([pelt_data[3][0], pelt_data[3][1], "# Pellet type (0,1,2 = B,R,Y respectively) and pellet size (1,5,10,20)"])
                 else:
+                    assert_notlist(pelt_data[3])
                     new_pelt.append([pelt_data[3], "# Identifier of treasure, see https://pikmintkb.com/wiki/Pikmin_2_identifiers	"])
+
                 textnode.append(new_pelt)
                 if len(self._object_data) > 1:
                     textnode.extend(self._object_data[1:])
@@ -675,7 +734,11 @@ class PikminObject(object):
                 textnode.extend(self._object_data)
         except Exception as e:
             print(e)
-            textnode = textnode[:current_progress]
-            textnode.extend(self._object_data)
+
+            newtextnode = TextNode()
+            newtextnode.extend(textnode[:current_progress])
+            newtextnode.extend(self._object_data)
+
+            textnode = newtextnode
 
         return textnode
