@@ -1,4 +1,5 @@
 import traceback
+from timeit import default_timer
 
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
@@ -287,6 +288,7 @@ class GenEditor(QMainWindow):
     def button_save_level(self):
         if self.current_gen_path is not None:
             with open(self.current_gen_path, "w", encoding="shift-jis-2004", errors="backslashreplace") as f:
+                start = default_timer()
                 try:
                     self.pikmin_gen_file.write(f)
                     self.set_has_unsaved_changes(False)
@@ -296,6 +298,7 @@ class GenEditor(QMainWindow):
                     open_error_dialog(str(error), self)
                 else:
                     self.statusbar.showMessage("Saved to {0}".format(self.current_gen_path))
+                print("time taken:", default_timer()-start, "s")
         else:
             self.button_save_level_as()
 
@@ -682,8 +685,12 @@ class GenEditor(QMainWindow):
                             if coord == "x": pikobject.set_rotation((val, None, None))
                             elif coord == "y": pikobject.set_rotation((None, val, None))
                             elif coord == "z": pikobject.set_rotation((None, None, val))
-                        elif pikobject.object_type == "{teki}":
+                        elif pikobject.object_type == "{teki}" and coord == "y":
                             pikobject.set_rotation((None, val, None))
+                        elif pikobject.object_type == "{pelt}":
+                            if coord == "x": pikobject.set_rotation((val, None, None))
+                            elif coord == "y": pikobject.set_rotation((None, val, None))
+                            elif coord == "z": pikobject.set_rotation((None, None, val))
                     #self.pikmin_gen_view.update()
                     self.pikmin_gen_view.do_redraw()
                     if not self._justupdatingselectedobject:
