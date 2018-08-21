@@ -1,6 +1,7 @@
 # Library for parsing some Pikmin 2 Text files (often have the ending .txt)
 
 from io import StringIO
+from timeit import default_timer
 from pikmingen import PikminObject, TextRoot, TextNode
 
 
@@ -47,6 +48,13 @@ def parse_structure(f, depth=0, brackets=0):
     return data, brackets
 
 
+def stringify(x):
+    if isinstance(x, list):
+        return " ".join(x)
+    else:
+        return str(x)
+
+
 # General parser/writer for all txt files, but not very useful
 class PikminTxt(object):
     def __init__(self):
@@ -68,12 +76,18 @@ class PikminTxt(object):
         for item in node:
             if isinstance(item, TextNode):
                 f.write(depth*indent_char+"{\n")
-                self.write(f, item, depth=depth+1, indent_char=indent_char)
+                PikminTxt.write(self, f, item, depth=depth+1, indent_char=indent_char)
                 f.write(depth*indent_char+"}\n")
             else:
                 f.write(depth*indent_char)
                 if isinstance(item, list):
-                    f.write(" ".join(str(x) for x in item))
+                    for x in item:
+                        if isinstance(x, list):
+                            raise RuntimeError("This shouldn't happen: {} is a list".format(x))
+                        else:
+                            f.write(str(x))
+                            f.write(" ")
+                    #f.write(" ".join(stringify(x) for x in item))
                 else:
                     f.write(str(item))
                 f.write("\n")
@@ -154,7 +168,6 @@ class RouteTxt(PikminTxt):
 
             if len(self.links[waypoint_index]) == 0:
                 del self.links[waypoint_index]
-
 
     def add_waypoint(self, x, y, z, radius):
         indices = sorted(self.waypoints.keys())
@@ -295,7 +308,7 @@ class PikminGenFile(PikminTxt):
     def write(self, f, *args, **kwargs):
         del self._root
         self._root = TextRoot()
-
+        start = default_timer()
         self._root.append(self.version)
         self._root.append([self.startpos_x, self.startpos_y, self.startpos_z])
         self._root.append(self.startdir)
@@ -308,7 +321,8 @@ class PikminGenFile(PikminTxt):
                self._root.append([comment.strip()])
             self._root.append(node)
 
-        super().write(f, *args, **kwargs)
+        now = default_timer()-start
+        start = default_timer()
 
 
 def gen_readcomments(f):
