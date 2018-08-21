@@ -308,7 +308,7 @@ class PikminGenFile(PikminTxt):
     def write(self, f, *args, **kwargs):
         del self._root
         self._root = TextRoot()
-        start = default_timer()
+
         self._root.append(self.version)
         self._root.append([self.startpos_x, self.startpos_y, self.startpos_z])
         self._root.append(self.startdir)
@@ -321,8 +321,7 @@ class PikminGenFile(PikminTxt):
                self._root.append([comment.strip()])
             self._root.append(node)
 
-        now = default_timer()-start
-        start = default_timer()
+        super().write(f, *args, **kwargs)
 
 
 def gen_readcomments(f):
