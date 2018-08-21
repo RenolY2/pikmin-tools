@@ -1,0 +1,22 @@
+{
+	{v0.3} 	# version
+	-10621 	# reserved
+	0 	# days till revival
+	146 190 130 222 149 199 130 82 130 99 129 105 130 82 130 84 149 67 129 106 0 4 4 4 4 4 4 4 4 4 4 4 	# <沈む壁３Ｄ（３５匹）>
+	-1150.000000 10.000000 2455.000000 	# pos
+	0.000000 0.000000 0.000000 	# offset
+	{item} {0002} 	# dwfl
+	{
+		{dwfl} 	# item id
+		0.000000 180.000000 0.000000 	# rotation
+		{0002} 	# item local version
+		35 	# Amount of pikmin required to make the floor go do down. Only matters for action type 0,for 1 the change is cosmetic
+		2 	# type: 0=small block, 1=large block, 2=paper bag
+		0 	# action type: 0=normal, 1 for seesaw
+		{none} 	# id, when action type is set to seesaw then two downfloors with the same id are connected. If a seesaw doesn't have a second downfloor it's connected to, the game crashes
+	}
+	# gen base
+	{
+		{_eof} 
+	}
+}

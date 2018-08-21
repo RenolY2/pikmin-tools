@@ -1,0 +1,19 @@
+# Burgeoning Spiderwort
+{
+    {v0.1} # Version 
+    3 # Reserved 
+    0 # Days till resurrection 
+    139 180 131 141 131 147 131 79 130 80 130 105 0 79 129 106 0 106 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+    -74.81011649294942 0.0 3029.9000000000024 # Position 
+    0 0 0 # Offset 
+    {item} {0002} 
+    {
+        {plnt} # Item ID 
+        0.0 150.06469071315897 0.0 # rotation 
+        {0001} # item local version 
+        0  # Berry type: 0=Red, 1=purple, 2=mixed
+    }
+    {
+        {_eof}
+    }
+}

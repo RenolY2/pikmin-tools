@@ -1,0 +1,35 @@
+{
+	{v0.1} 	# version
+	0 	# reserved
+	0 	# 復活日数
+	108 97 115 116 95 49 129 124 141 172 147 215 0 73 131 147 131 138 129 91 0 206 149 158 0 0 0 0 0 0 0 0 	# <last_1－混沌>
+	-3289.465576 -30.000000 142.189209 	# pos
+	0.000000 0.000000 0.000000 	# offset
+	{item} {0002} 	# cave
+	{
+		{cave} 	# item id
+		0.000000 40.000000 0.000000 	# rotation
+		{0002} 	# item local version
+		last_1.txt # <- You need to modify this to point to the right cave.
+		units.txt 
+		{l_01} 	# id (for stages.txt) <- you need to modify this to point to the right cave
+		# FogParm
+		{
+			{fg00} 4 1.000000 	# startZ
+			{fg01} 4 650.000000 	# endZ
+			{fg02} 4 1.500000 	# startTime
+			{fg03} 4 2.000000 	# endTime
+			{fg04} 1 42 	# Red
+			{fg05} 1 55 	# Green
+			{fg06} 1 45 	# Blue
+			{fg07} 4 6000.000000 	# Distance
+			{fg08} 4 200.000000 	# Enter Dist
+			{fg09} 4 205.000000 	# Exit  Dist
+			{_eof} 
+		}
+	}
+	# gen base
+	{
+		{_eof} 
+	}
+}

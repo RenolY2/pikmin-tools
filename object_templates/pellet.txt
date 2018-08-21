@@ -1,0 +1,19 @@
+# Treasure
+{
+	{v0.1} # Version 
+	11 # Reserved 
+	0 # Days till resurrection 
+	129 154 129 70 97 107 97 103 97 105 129 105 145 83 150 132 130 220 130 232 129 106 0 101 110 116 108 101 129 106 0 0 # ★：akagai（全埋まり）
+	-291.0256284488046 0.0 2683.5000000000023 # Position 
+	0 0 0 # Offset 
+	{pelt} {0000} 
+	{
+		0 # Pellet
+		0.0 -120.0 0.0 # Rotation 
+		{0000} # Local version 
+		0 1 # Pellet type (0,1,2 = B,R,Y respectively) and pellet size (1,5,10,20) 
+	}
+	{
+		{_eof}
+	}
+}
