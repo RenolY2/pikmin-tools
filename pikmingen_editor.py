@@ -455,14 +455,14 @@ class GenEditor(QMainWindow):
     def action_add_object(self, x, z):
         newobj = self.object_to_be_added.copy()
 
-        newobj.position_x = newobj.x = x
-        newobj.position_z = newobj.z = z
+        newobj.position_x = newobj.x = round(x, 6)
+        newobj.position_z = newobj.z = round(z, 6)
         newobj.offset_x = newobj.offset_z = 0.0
 
         if self.editorconfig.getboolean("GroundObjectsWhenAdding") is True:
             if self.pikmin_gen_view.collision is not None:
                 y = self.pikmin_gen_view.collision.collide_ray_downwards(newobj.x, newobj.z)
-                newobj.y = newobj.position_y = y
+                newobj.y = newobj.position_y = round(y, 6)
                 newobj.offset_y = 0
 
         self.pikmin_gen_file.objects.append(newobj)
@@ -498,6 +498,8 @@ class GenEditor(QMainWindow):
         for obj in self.pikmin_gen_view.selected:
             obj.x += deltax
             obj.z += deltaz
+            obj.x = round(obj.x, 6)
+            obj.z = round(obj.z, 6)
             obj.position_x = obj.x
             obj.position_z = obj.z
             obj.offset_x = 0
@@ -506,7 +508,7 @@ class GenEditor(QMainWindow):
             if self.editorconfig.getboolean("GroundObjectsWhenMoving") is True:
                 if self.pikmin_gen_view.collision is not None:
                     y = self.pikmin_gen_view.collision.collide_ray_downwards(obj.x, obj.z)
-                    obj.y = obj.position_y = y
+                    obj.y = obj.position_y = round(y, 6)
                     obj.offset_y = 0
 
         if len(self.pikmin_gen_view.selected) == 1:
@@ -553,7 +555,7 @@ class GenEditor(QMainWindow):
             self.pikmin_gen_view.MOVE_RIGHT = 0
 
     def action_rotate_object(self, obj, angle):
-        obj.set_rotation((None, angle, None))
+        obj.set_rotation((None, round(angle, 6), None))
         self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
 
         #self.pikmin_gen_view.update()
@@ -567,7 +569,7 @@ class GenEditor(QMainWindow):
             height = self.pikmin_gen_view.collision.collide_ray_downwards(obj.x, obj.z)
 
             if height is not None:
-                obj.position_y = obj.y = height
+                obj.position_y = obj.y = round(height, 6)
                 obj.offset_y = 0.0
 
         if len(self.pikmin_gen_view.selected) == 1:
@@ -830,12 +832,6 @@ class EditorHistory(object):
         item = self.history[self.step]
         self.step += 1
         return item
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
