@@ -32,6 +32,7 @@ MOUSE_MODE_MOVEWP = 1
 MOUSE_MODE_ADDWP = 2
 MOUSE_MODE_CONNECTWP = 3
 
+
 def catch_exception(func):
     def handle(*args, **kwargs):
         try:
@@ -53,6 +54,7 @@ def rotate(corner_x, corner_y, center_x, center_y, angle):
 
     return QPoint(int(rotated_x+center_x), int(rotated_y+center_y))
 
+
 def rotate_rel(corner_x, corner_y, center_x, center_y, angle):
     temp_x = corner_x-center_x
     temp_y = corner_y-center_y
@@ -64,14 +66,6 @@ def rotate_rel(corner_x, corner_y, center_x, center_y, angle):
 
     return rotated_x, rotated_y
 
-#def transform_coords(x,y, offsetx, offsety, scale):
-#    pass
-
-def transform_coords(x,z, startx, startz, scalex, scalez):
-    relativex = x-startx
-    relativez = z-startz
-
-    return relativex*scalex, relativez*scalez
 
 class MapViewer(QWidget):
     mouse_clicked = pyqtSignal(QMouseEvent)
@@ -160,11 +154,12 @@ class MapViewer(QWidget):
         self.move_startpos = []
         self.overlapping_wp_index = 0
         self.editorconfig = None
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
 
     def set_visibility(self, visibility):
         self.visibility_toggle = visibility
 
-    def reset(self):
+    def reset(self, keep_collision=False):
         del self.waypoints
         del self.paths
         self.overlapping_wp_index = 0
@@ -177,10 +172,12 @@ class MapViewer(QWidget):
         self.origin_x = self.SIZEX//2
         self.origin_z = self.SIZEY//2
 
-        self.offset_x = 0
-        self.offset_z = 0
+        if not keep_collision:
+            self.offset_x = 0
+            self.offset_z = 0
 
-        self._zoom_factor = 10
+            self._zoom_factor = 10
+            self.level_image = None
 
         self.left_button_down = False
         self.mid_button_down = False
@@ -191,11 +188,12 @@ class MapViewer(QWidget):
         self.selectionbox_end = None
 
         self.selected_waypoints = []
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
 
         #self.setMinimumSize(QSize(self.SIZEX, self.SIZEY))
         #self.setMaximumSize(QSize(self.SIZEX, self.SIZEY))
 
-        self.level_image = None
+
         #del self.collision
         #self.collision = None
 
@@ -220,6 +218,10 @@ class MapViewer(QWidget):
 
         self.mousemode = mode
 
+        if mode == MOUSE_MODE_NONE:
+            self.setContextMenuPolicy(Qt.CustomContextMenu)
+        else:
+            self.setContextMenuPolicy(Qt.DefaultContextMenu)
     @property
     def zoom_factor(self):
         return self._zoom_factor/10.0
@@ -434,7 +436,6 @@ class MapViewer(QWidget):
         p.setPen(pen)
 
         if self.selectionbox_start is not None and self.selectionbox_end is not None:
-            print("selectionbox")
             startx, startz = ((self.selectionbox_start[0] - midx)*scalex,
                               (self.selectionbox_start[1] - midz)*scalez)
 
@@ -658,21 +659,16 @@ class MapViewer(QWidget):
                 selectstartz = tmp
 
             selected = []
-            #centerx, centerz = 0, 0
-            print("Stuff here")
+
             if self.pikmin_routes is not None:
                 for wp_index, wp_data in self.pikmin_routes.waypoints.items():
                     way_x, y, way_z, radius = wp_data
-
 
                     if (
                                 (selectstartx <= way_x <= selectendx and selectstartz <= way_z <= selectendz) or
                                 (way_x - radius) <= selectstartx and selectendx <= (way_x+radius) and
                                 (way_z - radius) <= selectstartz and selectendz <= (way_z+radius)
                     ):
-
-                        #centerx += way_x
-                        #centerz += way_z
                         selected.append(wp_index)
 
             if len(selected) == 0:
@@ -720,7 +716,8 @@ class MapViewer(QWidget):
                     self.position_update.emit(event, (round(mapx, 2), None, round(mapz,2)))
             else:
                 self.position_update.emit(event, (round(mapx, 2), None, round(mapz, 2)))
-        #self.mouse_dragged.emit(event)
+
+
     @catch_exception
     def mouseReleaseEvent(self, event):
         """if self.left_button_down:
@@ -752,20 +749,24 @@ class MapViewer(QWidget):
             if invert:
                 wheel_delta = -1*wheel_delta
 
-        if wheel_delta < 0:
-            current = self.zoom_factor
-            fac = calc_zoom_in_factor(current)
+            if wheel_delta < 0:
+                self.zoom_out()
 
-            self.zoom(fac)
+            elif wheel_delta > 0:
+                self.zoom_in()
 
-        elif wheel_delta > 0:
-            current = self.zoom_factor
+    def zoom_in(self):
+        current = self.zoom_factor
 
-            fac = calc_zoom_out_factor(current)
+        fac = calc_zoom_out_factor(current)
 
-            self.zoom(fac)
+        self.zoom(fac)
 
-        #self.mouse_wheel.emit(event)
+    def zoom_out(self):
+        current = self.zoom_factor
+        fac = calc_zoom_in_factor(current)
+
+        self.zoom(fac)
 
 
 class MenuDontClose(QMenu):

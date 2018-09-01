@@ -14,13 +14,13 @@ from copy import copy, deepcopy
 import os
 from os import path
 from timeit import default_timer
-from math import atan2, degrees, radians, sin, cos
 
-from PyQt5.QtCore import QSize, QRect, QMetaObject, QCoreApplication, QPoint
+
+from PyQt5.QtCore import Qt, QSize, QRect, QMetaObject, QCoreApplication, QPoint
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QFileDialog,
                              QSpacerItem, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QHBoxLayout,
                              QScrollArea, QGridLayout, QMenuBar, QMenu, QAction, QApplication, QStatusBar, QLineEdit)
-from PyQt5.QtGui import QMouseEvent, QImage
+
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 
@@ -38,6 +38,7 @@ from configuration import read_config, make_default_config, save_cfg
 
 PIKMIN2PATHS = "Carrying path files (route.txt;*.txt)"
 
+
 class EditorMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -48,12 +49,27 @@ class EditorMainWindow(QMainWindow):
         self.pikmin_routes = RouteTxt()
         self.pikminroutes_screen.pikmin_routes = self.pikmin_routes
         self.collision = None
+        self.current_coordinates = None
 
         self.button_delete_waypoints.pressed.connect(self.action_button_delete_wp)
         self.button_ground_waypoints.pressed.connect(self.action_button_ground_wp)
         self.button_move_waypoints.pressed.connect(self.action_button_move_wp)
         self.button_add_waypoint.pressed.connect(self.action_button_add_wp)
         self.button_connect_waypoints.pressed.connect(self.action_button_connect_wp)
+
+        self.pikminroutes_screen.customContextMenuRequested.connect(self.mapview_showcontextmenu)
+
+        QtWidgets.QShortcut(Qt.Key_M, self).activated.connect(self.action_button_move_wp)
+        QtWidgets.QShortcut(Qt.Key_G, self).activated.connect(self.action_button_ground_wp)
+        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_A, self).activated.connect(self.action_button_add_wp)
+        QtWidgets.QShortcut(Qt.Key_C, self).activated.connect(self.action_button_connect_wp)
+        QtWidgets.QShortcut(Qt.Key_Delete, self).activated.connect(self.action_button_delete_wp)
+
+        self.button_delete_waypoints.setToolTip("Shortcut: Delete")
+        self.button_move_waypoints.setToolTip("Shortcut: M")
+        self.button_ground_waypoints.setToolTip("Shortcut: G")
+        self.button_add_waypoint.setToolTip("Shortcut: Ctrl+A")
+        self.button_connect_waypoints.setToolTip("Shortcut: C")
 
         self.lineedit_xcoordinate.editingFinished.connect(self.action_lineedit_change_x)
         self.lineedit_ycoordinate.editingFinished.connect(self.action_lineedit_change_y)
@@ -65,6 +81,7 @@ class EditorMainWindow(QMainWindow):
         self.pikminroutes_screen.create_waypoint.connect(self.action_create_waypoint)
         self.disable_lineedits()
         self.last_render = None
+        self.current_route_path = None
 
         try:
             self.configuration = read_config()
@@ -78,67 +95,11 @@ class EditorMainWindow(QMainWindow):
         self.pathsconfig = self.configuration["default paths"]
         self.editorconfig = self.configuration["routes editor"]
         self.pikminroutes_screen.editorconfig = self.editorconfig
-        """
-        self.level = None
-        path = get_default_path()
-        if path is None:
-            self.default_path = ""
-        else:
-            self.default_path = path
 
-        self.dragging = False
-        self.last_x = None
-        self.last_y = None
-        self.dragged_time = None
-        self.deleting_item = False # Hack for preventing focusing on next item after deleting the previous one
-
-        self.moving = False
-
-        self.resetting = False
-
-        self.entity_list_widget.currentItemChanged.connect(self.action_listwidget_change_selection)
-        self.button_zoom_in.pressed.connect(self.zoom_in)
-        self.button_zoom_out.pressed.connect(self.zoom_out)
-        self.button_remove_entity.pressed.connect(self.remove_position)
-        self.button_move_entity.pressed.connect(self.move_entity)
-        self.button_clone_entity.pressed.connect(self.action_clone_entity)
-        self.button_show_passengers.pressed.connect(self.action_passenger_window)
-        self.button_edit_xml.pressed.connect(self.action_open_xml_editor)
-        self.button_edit_base_xml.pressed.connect(self.action_open_basexml_editor)
-        self.lineedit_angle.editingFinished.connect(self.action_lineedit_changeangle)
-
-
-        self.bw_map_screen.mouse_clicked.connect(self.get_position)
-        self.bw_map_screen.entity_clicked.connect(self.entity_position)
-        self.bw_map_screen.mouse_dragged.connect(self.mouse_move)
-        self.bw_map_screen.mouse_released.connect(self.mouse_release)
-        self.bw_map_screen.mouse_wheel.connect(self.mouse_wheel_scroll_zoom)
-
-
-        status = self.statusbar
-        self.bw_map_screen.setMouseTracking(True)
-
-        self.passenger_window = BWPassengerWindow()
-        self.passenger_window.passengerlist.currentItemChanged.connect(self.passengerwindow_action_choose_entity)
-
-        self.xmlobject_textbox = BWEntityXMLEditor()
-        self.xmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_object_xml)
-        self.xmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
-
-
-        self.basexmlobject_textbox = BWEntityXMLEditor(windowtype="XML Base Object")
-        self.basexmlobject_textbox.button_xml_savetext.pressed.connect(self.xmleditor_action_save_base_object_xml)
-        self.basexmlobject_textbox.triggered.connect(self.action_open_xml_editor_unlimited)
-
-        self.types_visible = {}
-        self.terrain_image = None
-
-        status.showMessage("Ready")
-
-        self.xml_windows = {}"""
         print("We are now ready!")
 
     def reset(self):
+        self.current_position = None
         self.resetting = True
         self.statusbar.clearMessage()
         self.dragged_time = None
@@ -149,7 +110,8 @@ class EditorMainWindow(QMainWindow):
         self.dragged_time = None
 
         self.moving = False
-        self.pikminroutes_screen.reset()
+        self.pikminroutes_screen.reset(keep_collision=True)
+        self.current_route_path = None
 
 
         self.resetting = False
@@ -189,7 +151,9 @@ class EditorMainWindow(QMainWindow):
                         path_parts = path.split(filepath)
                         self.setWindowTitle("Routes Editor - {0}".format(filepath))
                         self.pathsconfig["routes"] = filepath
+                        self.current_route_path = filepath
                         save_cfg(self.configuration)
+
                     except Exception as error:
                         print("error", error)
                         traceback.print_exc()
@@ -203,17 +167,32 @@ class EditorMainWindow(QMainWindow):
         try:
             print("ok", self.pathsconfig["routes"])
 
+
+            if self.current_route_path is not None:
+                filepath = self.current_route_path
+                with open(filepath, "w") as f:
+                    self.pikmin_routes.write(f)
+                self.pathsconfig["routes"] = filepath
+                save_cfg(self.configuration)
+            else:
+                self.button_save_as_level()
+        except Exception as err:
+            traceback.print_exc()
+
+    def button_save_as_level(self):
+        try:
             filepath, choosentype = QFileDialog.getSaveFileName(
                 self, "Save File",
                 self.pathsconfig["routes"],
                 PIKMIN2PATHS+";;All files (*)")
 
-            print("doooone")
             if filepath:
                 with open(filepath, "w") as f:
                     self.pikmin_routes.write(f)
                 self.pathsconfig["routes"] = filepath
+                self.current_route_path = filepath
                 save_cfg(self.configuration)
+
         except Exception as err:
             traceback.print_exc()
 
@@ -239,7 +218,7 @@ class EditorMainWindow(QMainWindow):
             tmprenderwindow.destroy()
 
             self.pikminroutes_screen.set_collision(verts, faces)
-            self.pathsconfig["routes"] = filepath
+            self.pathsconfig["collision"] = filepath
             save_cfg(self.configuration)
 
         except:
@@ -257,7 +236,6 @@ class EditorMainWindow(QMainWindow):
                 load_from_arc = True
             else:
                 load_from_arc = False
-
 
             with open(filepath, "rb") as f:
                 if load_from_arc:
@@ -305,12 +283,12 @@ class EditorMainWindow(QMainWindow):
             self.lineedit_radius.setText("")
             self.disable_lineedits()
 
-
     def disable_lineedits(self):
         self.lineedit_xcoordinate.setDisabled(True)
         self.lineedit_ycoordinate.setDisabled(True)
         self.lineedit_zcoordinate.setDisabled(True)
         self.lineedit_radius.setDisabled(True)
+
     def enable_lineedits(self):
         self.lineedit_xcoordinate.setDisabled(False)
         self.lineedit_ycoordinate.setDisabled(False)
@@ -319,6 +297,7 @@ class EditorMainWindow(QMainWindow):
 
     def event_update_position(self, event, position):
         x,y,z = position
+        self.current_coordinates = position
         if y is None:
             y = "-"
         coordtext = "X: {}, Y: {}, Z: {}".format(x,y,z)
@@ -327,14 +306,13 @@ class EditorMainWindow(QMainWindow):
 
     @catch_exception
     def action_button_delete_wp(self):
-        if self.pikmin_routes is not None:
+        if self.pikmin_routes is not None and self.button_delete_waypoints.isEnabled():
             print("removing", self.pikminroutes_screen.selected_waypoints)
             for wp in self.pikminroutes_screen.selected_waypoints:
                 self.pikmin_routes.remove_waypoint(wp)
             self.pikminroutes_screen.selected_waypoints = {}
 
             self.pikminroutes_screen.update()
-
 
     def action_button_ground_wp(self):
         if self.pikmin_routes is not None and self.pikminroutes_screen.collision is not None:
@@ -397,6 +375,7 @@ class EditorMainWindow(QMainWindow):
                 for wp in self.pikminroutes_screen.selected_waypoints:
                     self.pikmin_routes.waypoints[wp][0] = value
                 self.pikminroutes_screen.update()
+
     def action_lineedit_change_y(self):
         try:
             value = float(self.lineedit_ycoordinate.text())
@@ -407,6 +386,7 @@ class EditorMainWindow(QMainWindow):
                 for wp in self.pikminroutes_screen.selected_waypoints:
                     self.pikmin_routes.waypoints[wp][1] = value
                 self.pikminroutes_screen.update()
+
     def action_lineedit_change_z(self):
         try:
             value = float(self.lineedit_zcoordinate.text())
@@ -417,6 +397,7 @@ class EditorMainWindow(QMainWindow):
                 for wp in self.pikminroutes_screen.selected_waypoints:
                     self.pikmin_routes.waypoints[wp][2] = value
                 self.pikminroutes_screen.update()
+
     def action_lineedit_change_radius(self):
         try:
             value = float(self.lineedit_radius.text())
@@ -451,7 +432,7 @@ class EditorMainWindow(QMainWindow):
                 do_ground = self.editorconfig.getboolean("GroundWaypointsWhenMoving")
                 for wp in self.pikminroutes_screen.selected_waypoints:
                     x,y,z,radius = self.pikmin_routes.waypoints[wp]
-                    if do_ground is True:
+                    if do_ground is True and self.pikminroutes_screen.collision is not None:
                         height = self.pikminroutes_screen.collision.collide_ray_downwards(x, z)
                         if height is not None:
                             y = height
@@ -483,14 +464,24 @@ class EditorMainWindow(QMainWindow):
         self.pikminroutes_screen.update()
         print("created")
 
+    @catch_exception
+    def mapview_showcontextmenu(self, position):
+        context_menu = QMenu(self)
+        action = QAction("Copy Coordinates", self)
+        action.triggered.connect(self.action_copy_coords_to_clipboard)
+        context_menu.addAction(action)
+        context_menu.exec(self.mapToGlobal(position))
+        context_menu.destroy()
+
+    def action_copy_coords_to_clipboard(self):
+        if self.current_coordinates is not None:
+            QApplication.clipboard().setText(", ".join(str(x) for x in self.current_coordinates))
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1200, 850)
         MainWindow.setMinimumSize(QSize(930, 850))
         MainWindow.setWindowTitle("Pikmin Routes Editor")
-        #MainWindow.setWindowTitle("Nep-Nep")
-
 
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -499,14 +490,9 @@ class EditorMainWindow(QMainWindow):
         self.horizontalLayout = QHBoxLayout(self.centralwidget)
         self.horizontalLayout.setObjectName("horizontalLayout")
 
-
-        #self.scrollArea = QScrollArea(self.centralwidget)
-        #self.scrollArea.setWidgetResizable(True)
-
         self.pikminroutes_screen = MapViewer(self.centralwidget)
         self.pikminroutes_screen.position_update.connect(self.event_update_position)
         self.pikminroutes_screen.select_update.connect(self.event_update_lineedit)
-        #self.scrollArea.setWidget(self.bw_map_screen)
         self.horizontalLayout.addWidget(self.pikminroutes_screen)
 
         spacerItem = QSpacerItem(10, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -567,11 +553,17 @@ class EditorMainWindow(QMainWindow):
         # ------
         # File menu buttons
         self.file_load_action = QAction("Load", self)
+        self.file_load_action.setShortcut("Ctrl+O")
         self.file_load_action.triggered.connect(self.button_load_level)
         self.file_menu.addAction(self.file_load_action)
         self.file_save_action = QAction("Save", self)
+        self.file_save_action.setShortcut("Ctrl+S")
         self.file_save_action.triggered.connect(self.button_save_level)
         self.file_menu.addAction(self.file_save_action)
+        self.file_save_as_action = QAction("Save As", self)
+        self.file_save_as_action.setShortcut("Ctrl+Alt+S")
+        self.file_save_as_action.triggered.connect(self.button_save_as_level)
+        self.file_menu.addAction(self.file_save_as_action)
 
 
         # ------ Collision Menu
@@ -603,33 +595,21 @@ class EditorMainWindow(QMainWindow):
         self.button_move_waypoints.setText("Move Waypoint(s)")
         self.button_ground_waypoints.setText("Ground Waypoint(s)")
         self.collision_menu.setTitle("Collision")
-        """self.button_clone_entity.setText(_translate("MainWindow", "Clone Entity"))
-        self.button_remove_entity.setText(_translate("MainWindow", "Delete Entity"))
-        self.button_move_entity.setText(_translate("MainWindow", "Move Entity"))
-        self.button_zoom_in.setText(_translate("MainWindow", "Zoom In"))
-        self.button_zoom_out.setText(_translate("MainWindow", "Zoom Out"))
-        self.button_show_passengers.setText(_translate("MainWindow", "Show Passengers"))
-        self.button_edit_xml.setText("Edit Object XML")
-        self.button_edit_base_xml.setText("Edit Base Object XML")
-
-        self.label_model_name.setText(_translate("MainWindow", "TextLabel1"))
-        self.label_object_id.setText(_translate("MainWindow", "TextLabel2"))
-        self.label_position.setText(_translate("MainWindow", "TextLabel3"))
-        self.label_4.setText(_translate("MainWindow", "TextLabel4"))
-        self.label_5.setText(_translate("MainWindow", "TextLabel5"))
-        self.file_menu.setTitle(_translate("MainWindow", "File"))
-        self.visibility_menu.setTitle(_translate("MainWindow", "Visibility"))
-        self.terrain_menu.setTitle("Terrain")"""
 
 if __name__ == "__main__":
     import sys
-
+    import platform
+    from PyQt5 import QtGui
     app = QApplication(sys.argv)
 
+    if platform.system() == "Windows":
+        import ctypes
+        myappid = 'P2RoutesEditor'  # arbitrary string
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
-    bw_gui = EditorMainWindow()
-
-    bw_gui.show()
+    route_gui = EditorMainWindow()
+    route_gui.setWindowIcon(QtGui.QIcon('resources/route_editor_icon.ico'))
+    route_gui.show()
     err_code = app.exec()
     #traceback.print_exc()
     sys.exit(err_code)
