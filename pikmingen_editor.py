@@ -111,8 +111,6 @@ class GenEditor(QMainWindow):
 
     def setup_ui(self):
         self.resize(1000, 800)
-        #self.setMinimumSize(QSize(930, 850))
-        #self.setWindowTitle("Pikmin 2 Generators Editor")
         self.set_base_window_title("")
 
         self.setup_ui_menubar()
@@ -150,8 +148,8 @@ class GenEditor(QMainWindow):
 
         save_file_shortcut = QtWidgets.QShortcut(Qt.CTRL + Qt.Key_S, self.file_menu)
         save_file_shortcut.activated.connect(self.button_save_level)
-        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_O, self.file_menu).activated.connect(self.button_load_level)
-        QtWidgets.QShortcut(Qt.CTRL + Qt.Key_Alt + Qt.Key_S, self.file_menu).activated.connect(self.button_save_level_as)
+        #QtWidgets.QShortcut(Qt.CTRL + Qt.Key_O, self.file_menu).activated.connect(self.button_load_level)
+        #QtWidgets.QShortcut(Qt.CTRL + Qt.Key_Alt + Qt.Key_S, self.file_menu).activated.connect(self.button_save_level_as)
 
         self.file_load_action = QAction("Load", self)
         self.save_file_action = QAction("Save", self)
