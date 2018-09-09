@@ -59,6 +59,8 @@ class GenEditor(QMainWindow):
         self._user_made_change = False
         self._justupdatingselectedobject = False
 
+        self.addobjectwindow_last_selected = None
+
 
     @catch_exception
     def reset(self):
@@ -86,6 +88,8 @@ class GenEditor(QMainWindow):
         self.pik_control.button_move_object.setChecked(False)
         self._window_title = ""
         self._user_made_change = False
+
+        self.addobjectwindow_last_selected = None
 
     def set_base_window_title(self, name):
         self._window_title = name
@@ -416,7 +420,10 @@ class GenEditor(QMainWindow):
             self.add_object_window = pikwidgets.AddPikObjectWindow()
             self.add_object_window.button_savetext.pressed.connect(self.button_add_item_window_save)
             self.add_object_window.closing.connect(self.button_add_item_window_close)
+            if self.addobjectwindow_last_selected is not None:
+                self.add_object_window.template_menu.setCurrentIndex(self.addobjectwindow_last_selected)
             self.add_object_window.show()
+
         elif self.pikmin_gen_view.mousemode == pikwidgets.MOUSE_MODE_ADDWP:
             self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
             self.pik_control.button_add_object.setChecked(False)
@@ -426,6 +433,9 @@ class GenEditor(QMainWindow):
             self.add_object_window = pikwidgets.AddPikObjectWindow()
             self.add_object_window.button_savetext.pressed.connect(self.button_add_item_window_save)
             self.add_object_window.closing.connect(self.button_add_item_window_close)
+            if self.addobjectwindow_last_selected is not None:
+                self.add_object_window.template_menu.setCurrentIndex(self.addobjectwindow_last_selected)
+
             self.add_object_window.show()
 
     @catch_exception
@@ -434,6 +444,7 @@ class GenEditor(QMainWindow):
             self.object_to_be_added = self.add_object_window.get_content()
 
             if self.object_to_be_added is not None:
+                self.addobjectwindow_last_selected = self.add_object_window.template_menu.currentIndex()
                 self.pik_control.button_add_object.setChecked(True)
                 self.pik_control.button_move_object.setChecked(False)
                 self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_ADDWP)
