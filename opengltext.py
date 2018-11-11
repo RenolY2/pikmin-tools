@@ -5,6 +5,7 @@ from PyQt5 import QtGui, QtCore, QtOpenGL, QtWidgets
 # PyOpenGL imports
 from OpenGL.GL import *
 import OpenGL.arrays.vbo as glvbo
+from lib.vectors import Vector3, Triangle
 
 from custom_widgets import catch_exception
 
@@ -51,6 +52,89 @@ for coltrans in [
 
 DO_GRAYSCALE = False
 
+def draw_collision(verts, faces):
+    biggest, smallest = None, None
+    for x, y, z in verts:
+        if biggest is None:
+            biggest = smallest = y
+        if y > biggest:
+            biggest = y
+        if y < smallest:
+            smallest = y
+    scaleheight = biggest - smallest
+    if scaleheight == 0:
+        scaleheight = 1
+
+    print(len(COLORS))
+    lightvec = Vector3(0, 1, -1)
+
+    glBegin(GL_TRIANGLES)
+
+    i = -1
+    for v1, v2, v3 in faces:
+        i += 1
+        v1x, v1y, v1z = verts[v1[0] - 1]
+        v2x, v2y, v2z = verts[v2[0] - 1]
+        v3x, v3y, v3z = verts[v3[0] - 1]
+
+        # grayscale = ((v1y+v2y+v3y)/3.0)/scaleheight
+        """average_y = max(v1y, v2y,v3y) - smallest#(v1y+v2y+v3y)/3.0 - smallest
+        index = int((average_y/scaleheight)*len(COLORS))
+        if index < 0:
+            index = 0
+        if index >= len(COLORS):
+            index = len(COLORS)-1
+        r, g, b = COLORS[index]
+        glColor3f(r/256.0,g/256.0,b/256.0)"""
+
+        if DO_GRAYSCALE:
+            average_y = (v1y + v2y + v3y) / 3.0 - smallest
+            grayscale = average_y / scaleheight
+
+            glColor3f(grayscale, grayscale, grayscale)
+            glVertex3f(v1x, -v1z, v1y)
+            glVertex3f(v2x, -v2z, v2y)
+            glVertex3f(v3x, -v3z, v3y)
+
+        else:
+            face = Triangle(Vector3(v1x, -v1z, v1y), Vector3(v2x, -v2z, v2y), Vector3(v3x, -v3z, v3y))
+            if face.normal.norm() != 0:
+                angle = lightvec.cos_angle(face.normal)
+            else:
+                angle = 0.0
+            light = max(abs(angle), 0.3)
+
+            average_y = v1y - smallest
+            index = int((average_y / scaleheight) * len(COLORS))
+            if index < 0:
+                index = 0
+            if index >= len(COLORS):
+                index = len(COLORS) - 1
+            r, g, b = (i * light for i in COLORS[index])
+            glColor3f(r / 256.0, g / 256.0, b / 256.0)
+            glVertex3f(v1x, -v1z, v1y)
+
+            average_y = v2y - smallest
+            index = int((average_y / scaleheight) * len(COLORS))
+            if index < 0:
+                index = 0
+            if index >= len(COLORS):
+                index = len(COLORS) - 1
+            r, g, b = (i * light for i in COLORS[index])
+            glColor3f(r / 256.0, g / 256.0, b / 256.0)
+            glVertex3f(v2x, -v2z, v2y)
+
+            average_y = v3y - smallest
+            index = int((average_y / scaleheight) * len(COLORS))
+            if index < 0:
+                index = 0
+            if index >= len(COLORS):
+                index = len(COLORS) - 1
+            r, g, b = (i * light for i in COLORS[index])
+            glColor3f(r / 256.0, g / 256.0, b / 256.0)
+            glVertex3f(v3x, -v3z, v3y)
+    glEnd()
+
 class GLPlotWidget(QtWidgets.QOpenGLWidget):
     # default window size
     width, height = 2000, 2000
@@ -85,87 +169,14 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) # clear the screen
         glDisable(GL_CULL_FACE)
         # set yellow color for subsequent drawing rendering calls
-        verts = self.verts
-        faces = self.faces
-        biggest, smallest = None, None
-        for x,y,z in verts:
-            if biggest is None:
-                biggest = smallest = y
-            if y > biggest:
-                biggest = y
-            if y < smallest:
-                smallest = y
-        scaleheight = biggest-smallest
-        if scaleheight == 0:
-            scaleheight = 1
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        glOrtho(-6000.0, 6000.0, -6000.0, 6000.0, -3000.0, 2000.0)
 
-        print(len(COLORS))
 
-        glBegin(GL_TRIANGLES)
-
-        i = -1
-        for v1, v2, v3 in faces:
-            i += 1
-            v1x, v1y, v1z = verts[v1[0]-1]
-            v2x, v2y, v2z = verts[v2[0]-1]
-            v3x, v3y, v3z = verts[v3[0]-1]
-
-            #grayscale = ((v1y+v2y+v3y)/3.0)/scaleheight
-            """average_y = max(v1y, v2y,v3y) - smallest#(v1y+v2y+v3y)/3.0 - smallest
-            index = int((average_y/scaleheight)*len(COLORS))
-            if index < 0:
-                index = 0
-            if index >= len(COLORS):
-                index = len(COLORS)-1
-            r, g, b = COLORS[index]
-            glColor3f(r/256.0,g/256.0,b/256.0)"""
-
-            if self.colors is not None:
-                glColor3f(*self.colors[i])
-                glVertex3f(v1x, -v1z, v1y)
-                glVertex3f(v2x, -v2z, v2y)
-                glVertex3f(v3x, -v3z, v3y)
-
-            elif DO_GRAYSCALE:
-                average_y = (v1y+v2y+v3y)/3.0 - smallest
-                grayscale = average_y/scaleheight
-
-                glColor3f(grayscale, grayscale, grayscale)
-                glVertex3f(v1x, -v1z, v1y)
-                glVertex3f(v2x, -v2z, v2y)
-                glVertex3f(v3x, -v3z, v3y)
-
-            else:
-                average_y = v1y - smallest
-                index = int((average_y/scaleheight)*len(COLORS))
-                if index < 0:
-                    index = 0
-                if index >= len(COLORS):
-                    index = len(COLORS)-1
-                r, g, b = COLORS[index]
-                glColor3f(r/256.0,g/256.0,b/256.0)
-                glVertex3f(v1x, -v1z, v1y)
-
-                average_y = v2y - smallest
-                index = int((average_y/scaleheight)*len(COLORS))
-                if index < 0:
-                    index = 0
-                if index >= len(COLORS):
-                    index = len(COLORS)-1
-                r, g, b = COLORS[index]
-                glColor3f(r/256.0,g/256.0,b/256.0)
-                glVertex3f(v2x, -v2z, v2y)
-
-                average_y = v3y - smallest
-                index = int((average_y/scaleheight)*len(COLORS))
-                if index < 0:
-                    index = 0
-                if index >= len(COLORS):
-                    index = len(COLORS)-1
-                r, g, b = COLORS[index]
-                glColor3f(r/256.0,g/256.0,b/256.0)
-                glVertex3f(v3x, -v3z, v3y)
-        glEnd()
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        draw_collision(self.verts, self.faces)
         glFinish()
         print("drawn")
 
@@ -176,12 +187,7 @@ class GLPlotWidget(QtWidgets.QOpenGLWidget):
         # paint within the whole window
         glEnable( GL_DEPTH_TEST )
         glViewport(0, 0, self.width, self.width)
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glOrtho(-6000.0, 6000.0, -6000.0, 6000.0, -3000.0, 2000.0)
 
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
 
 
 # define a Qt window with an OpenGL widget inside it

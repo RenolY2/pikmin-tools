@@ -185,14 +185,36 @@ class GenEditor(QMainWindow):
         # Misc
         self.misc_menu = QMenu(self.menubar)
         self.misc_menu.setTitle("Misc")
-        self.spawnpoint_action = QAction("Set startPos/Dir", self)
-        self.spawnpoint_action.triggered.connect(self.action_open_rotationedit_window)
-        self.misc_menu.addAction(self.spawnpoint_action)
+        #self.spawnpoint_action = QAction("Set startPos/Dir", self)
+        #self.spawnpoint_action.triggered.connect(self.action_open_rotationedit_window)
+        #self.misc_menu.addAction(self.spawnpoint_action)
+        self.change_to_topdownview_action = QAction("Topdown View", self)
+        self.change_to_topdownview_action.triggered.connect(self.change_to_topdownview)
+        self.misc_menu.addAction(self.change_to_topdownview_action)
+        self.change_to_topdownview_action.setCheckable(True)
+        self.change_to_topdownview_action.setChecked(True)
+        self.change_to_topdownview_action.setShortcut("Ctrl+1")
+
+        self.change_to_3dview_action = QAction("3D View", self)
+        self.change_to_3dview_action.triggered.connect(self.change_to_3dview)
+        self.misc_menu.addAction(self.change_to_3dview_action)
+        self.change_to_3dview_action.setCheckable(True)
+        self.change_to_3dview_action.setShortcut("Ctrl+2")
 
         self.menubar.addAction(self.file_menu.menuAction())
         self.menubar.addAction(self.collision_menu.menuAction())
         self.menubar.addAction(self.misc_menu.menuAction())
         self.setMenuBar(self.menubar)
+
+    def change_to_topdownview(self):
+        self.pikmin_gen_view.change_from_3d_to_topdown()
+        self.change_to_topdownview_action.setChecked(True)
+        self.change_to_3dview_action.setChecked(False)
+
+    def change_to_3dview(self):
+        self.pikmin_gen_view.change_from_topdown_to_3d()
+        self.change_to_topdownview_action.setChecked(False)
+        self.change_to_3dview_action.setChecked(True)
 
     def setup_ui_toolbar(self):
         # self.toolbar = QtWidgets.QToolBar("Test", self)
@@ -382,14 +404,14 @@ class GenEditor(QMainWindow):
                 faces = [face[0] for face in collision.faces]
                 width = int(self.configuration["model render"]["Width"])
                 height = int(self.configuration["model render"]["Height"])
-                tmprenderwindow = opengltext.TempRenderWindow(verts, faces, render_res=(width, height))
+                """tmprenderwindow = opengltext.TempRenderWindow(verts, faces, render_res=(width, height))
                 tmprenderwindow.show()
 
                 framebuffer = tmprenderwindow.widget.grabFramebuffer()
                 framebuffer.save("tmp_image.png", "PNG")
                 self.pikmin_gen_view.level_image = framebuffer
 
-                tmprenderwindow.destroy()
+                tmprenderwindow.destroy()"""
 
                 self.pikmin_gen_view.set_collision(verts, faces)
                 self.pathsconfig["collision"] = filepath
@@ -471,8 +493,9 @@ class GenEditor(QMainWindow):
         if self.editorconfig.getboolean("GroundObjectsWhenAdding") is True:
             if self.pikmin_gen_view.collision is not None:
                 y = self.pikmin_gen_view.collision.collide_ray_downwards(newobj.x, newobj.z)
-                newobj.y = newobj.position_y = round(y, 6)
-                newobj.offset_y = 0
+                if y is not None:
+                    newobj.y = newobj.position_y = round(y, 6)
+                    newobj.offset_y = 0
 
         self.pikmin_gen_file.objects.append(newobj)
         #self.pikmin_gen_view.update()
@@ -535,13 +558,17 @@ class GenEditor(QMainWindow):
             self.pikmin_gen_view.rotation_is_pressed = True
 
         if event.key() == Qt.Key_W:
-            self.pikmin_gen_view.MOVE_UP = 1
+            self.pikmin_gen_view.MOVE_FORWARD = 1
         elif event.key() == Qt.Key_S:
-            self.pikmin_gen_view.MOVE_DOWN = 1
+            self.pikmin_gen_view.MOVE_BACKWARD = 1
         elif event.key() == Qt.Key_A:
             self.pikmin_gen_view.MOVE_LEFT = 1
         elif event.key() == Qt.Key_D:
             self.pikmin_gen_view.MOVE_RIGHT = 1
+        elif event.key() == Qt.Key_Q:
+            self.pikmin_gen_view.MOVE_UP = 1
+        elif event.key() == Qt.Key_E:
+            self.pikmin_gen_view.MOVE_DOWN = 1
 
         if event.key() == Qt.Key_Plus:
             self.pikmin_gen_view.zoom_in()
@@ -555,13 +582,17 @@ class GenEditor(QMainWindow):
             self.pikmin_gen_view.rotation_is_pressed = False
 
         if event.key() == Qt.Key_W:
-            self.pikmin_gen_view.MOVE_UP = 0
+            self.pikmin_gen_view.MOVE_FORWARD = 0
         elif event.key() == Qt.Key_S:
-            self.pikmin_gen_view.MOVE_DOWN = 0
+            self.pikmin_gen_view.MOVE_BACKWARD = 0
         elif event.key() == Qt.Key_A:
             self.pikmin_gen_view.MOVE_LEFT = 0
         elif event.key() == Qt.Key_D:
             self.pikmin_gen_view.MOVE_RIGHT = 0
+        elif event.key() == Qt.Key_Q:
+            self.pikmin_gen_view.MOVE_UP = 0
+        elif event.key() == Qt.Key_E:
+            self.pikmin_gen_view.MOVE_DOWN = 0
 
     def action_rotate_object(self, obj, angle):
         obj.set_rotation((None, round(angle, 6), None))
@@ -746,7 +777,7 @@ class GenEditor(QMainWindow):
                     self.editing_windows[currentobj].activateWindow()
 
     @catch_exception
-    def action_update_info(self, event):
+    def action_update_info(self):
         if self.pikmin_gen_file is not None:
             selected = self.pikmin_gen_view.selected
             self._justupdatingselectedobject = True
