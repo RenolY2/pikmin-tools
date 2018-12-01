@@ -24,7 +24,7 @@ from custom_widgets import (MapViewer, rotate_rel,
 from pikmingen import PikminObject
 from libpiktxt import PikminTxt
 from opengltext import draw_collision
-from lib.vectors import Matrix4x4, Vector3
+from lib.vectors import Matrix4x4, Vector3, Line, Plane, Triangle
 import pikmingen
 from lib.model_rendering import TexturedPlane
 
@@ -75,11 +75,23 @@ OBJECT_SIZES = {
 def catch_exception_with_dialog(func):
     def handle(*args, **kwargs):
         try:
+            print(args, kwargs)
             return func(*args, **kwargs)
         except Exception as e:
             traceback.print_exc()
             open_error_dialog(str(e), None)
     return handle
+
+def catch_exception_with_dialog_nokw(func):
+    def handle(*args, **kwargs):
+        try:
+            print(args, kwargs)
+            return func(*args, **kwargs)
+        except Exception as e:
+            traceback.print_exc()
+            open_error_dialog(str(e), None)
+    return handle
+
 
 MODE_TOPDOWN = 0
 MODE_3D = 1
@@ -95,6 +107,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
     move_points = pyqtSignal(float, float)
     connect_update = pyqtSignal(int, int)
     create_waypoint = pyqtSignal(float, float)
+    create_waypoint_3d = pyqtSignal(float, float, float)
     ENTITY_SIZE = ENTITY_SIZE
 
     rotate_current = pyqtSignal(pikmingen.PikminObject, float)
@@ -158,6 +171,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         self.setMouseTracking(True)
 
         self.pikmin_generators = None
+        self.waterboxes = []
 
         self.mousemode = MOUSE_MODE_NONE
 
@@ -212,6 +226,8 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         self.selectionbox_projected_up = None
         self.selectionbox_projected_right = None
         self.selectionbox_projected_coords = None
+
+        self.move_collision_plane = Plane(Vector3(0.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0))
 
     @catch_exception_with_dialog
     def initializeGL(self):
@@ -298,6 +314,9 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         else:
             self.mode = MODE_3D
 
+            if self.mousemode == MOUSE_MODE_NONE:
+                self.setContextMenuPolicy(Qt.DefaultContextMenu)
+
             # This is necessary so that the position of the 3d camera equals the middle of the topdown view
             self.offset_x *= -1
             self.do_redraw()
@@ -307,6 +326,9 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
             return
         else:
             self.mode = MODE_TOPDOWN
+            if self.mousemode == MOUSE_MODE_NONE:
+                self.setContextMenuPolicy(Qt.CustomContextMenu)
+
             self.offset_x *= -1
             self.do_redraw()
 
@@ -462,6 +484,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
             self.offset_x = 0
             self.offset_z = 0
             self._zoom_factor = 10
+            #self.waterboxes = []
 
         self.pikmin_generators = None
 
@@ -519,7 +542,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
 
         self.mousemode = mode
 
-        if self.mousemode == MOUSE_MODE_NONE:
+        if self.mousemode == MOUSE_MODE_NONE and self.mode == MODE_TOPDOWN:
             self.setContextMenuPolicy(Qt.CustomContextMenu)
         else:
             self.setContextMenuPolicy(Qt.DefaultContextMenu)
@@ -656,15 +679,31 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
 
 
         glClearColor(1.0, 1.0, 1.0, 0.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glEnable(GL_DEPTH_TEST)
+        glDisable(GL_TEXTURE_2D)
+        glColor4f(1.0, 1.0, 1.0, 1.0)
         if self.main_model is not None:
             #print(self.main_model, type(self.main_model))
+
             glCallList(self.main_model)
+
+
         if self.mode == MODE_TOPDOWN:
             glDisable(GL_DEPTH_TEST)
         glCallList(self.grid)
 
+        if self.mode == MODE_TOPDOWN:
+            glDisable(GL_ALPHA_TEST)
+            glDisable(GL_TEXTURE_2D)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+            glEnable(GL_BLEND)
+            glEnable(GL_DEPTH_TEST)
+            for waterbox in self.waterboxes:
+                waterbox.render()
+            glDisable(GL_DEPTH_TEST)
+            glDisable(GL_BLEND)
 
         glEnable(GL_ALPHA_TEST)
 
@@ -673,7 +712,6 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         #self.testimage.render()
 
         if self.pikmin_generators is not None:
-
             selected = self.selected
             objects = self.pikmin_generators.objects
             #links = self.pikmin_routes.links
@@ -684,7 +722,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                 #glColor3f(1.0, 1.0, 1.0)
                 name = pikminobject.get_useful_object_name()
                 glPushMatrix()
-                glColor3f(1.0, 1.0, 1.0)
+                glColor4f(1.0, 1.0, 1.0, 1.0)
                 if pikminobject.object_type == "{item}":
                     angle = pikminobject.get_horizontal_rotation()
                     glTranslatef(x, -z, y + 1)
@@ -705,11 +743,11 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                             model.render()
 
                 if pikminobject in selected:
-                    glColor3f(1.0, 0.0, 0.0)
+                    glColor4f(1.0, 0.0, 0.0, 1.0)
                 elif name in self.onion_models:
                     self.onion_models[name].apply_color()
                 else:
-                    glColor3f(0.0, 0.0, 0.0)
+                    glColor4f(0.0, 0.0, 0.0, 1.0)
 
                 glPopMatrix()
                 glPushMatrix()
@@ -729,13 +767,22 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                         glEnable(GL_ALPHA_TEST)
                 glPopMatrix()
 
-        glDisable(GL_ALPHA_TEST)
+        glDisable(GL_TEXTURE_2D)
 
+        if self.mode != MODE_TOPDOWN:
+            glDisable(GL_ALPHA_TEST)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+            glEnable(GL_BLEND)
+            glEnable(GL_DEPTH_TEST)
+            for waterbox in self.waterboxes:
+                waterbox.render()
+            glDisable(GL_BLEND)
 
+        glDisable(GL_DEPTH_TEST)
         if self.selectionbox_start is not None and self.selectionbox_end is not None:
             startx, startz = self.selectionbox_start
             endx, endz = self.selectionbox_end
-            glColor3f(1.0, 0.0, 0.0)
+            glColor4f(1.0, 0.0, 0.0, 1.0)
             glLineWidth(2.0)
             glBegin(GL_LINE_LOOP)
             glVertex3f(startx, startz, 0)
@@ -748,7 +795,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         if self.selectionbox_projected_origin is not None and self.selectionbox_projected_coords:
             origin = self.selectionbox_projected_origin
             point2, point3, point4 = self.selectionbox_projected_coords
-            glColor3f(1.0, 0.0, 0.0)
+            glColor4f(1.0, 0.0, 0.0, 1.0)
             glLineWidth(2.0)
 
             point1 = origin
@@ -859,45 +906,122 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
 
                     self.create_waypoint.emit(destx, -destz)
         else:
-            if event.buttons() & Qt.RightButton and not (event.buttons() & Qt.LeftButton):
+            if event.buttons() & Qt.RightButton and not (event.buttons() & Qt.LeftButton & self.mousemode == MOUSE_MODE_NONE):
                 self.last_move = (event.x(), event.y())
                 self.right_button_down = True
-            if (event.buttons() & Qt.LeftButton and not self.left_button_down and not self.right_button_down):
+
+            if (event.buttons() & Qt.LeftButton and not self.left_button_down):
                 self.left_button_down = True
-                self.selection_queue.append((event.x(), event.y(), 1, 1,
-                                             self.shift_is_pressed))
-                self.do_redraw()
 
-                self.camera_direction.normalize()
-                self.selectionbox_projected_2d = (event.x(), event.y())
-                view = self.camera_direction.copy()
+                # Do selection
+                if self.mousemode == MOUSE_MODE_NONE and not self.right_button_down:
+                    self.selection_queue.append((event.x(), event.y(), 1, 1,
+                                                 self.shift_is_pressed))
+                    self.do_redraw()
 
-                h = view.cross(Vector3(0, 0, 1))
-                v = h.cross(view)
+                    self.camera_direction.normalize()
+                    self.selectionbox_projected_2d = (event.x(), event.y())
+                    view = self.camera_direction.copy()
 
-                h.normalize()
-                v.normalize()
+                    h = view.cross(Vector3(0, 0, 1))
+                    v = h.cross(view)
 
-                rad = 75 * pi / 180.0
-                vLength = tan(rad / 2) * 1.0
-                hLength = vLength * (self.canvas_width / self.canvas_height)
+                    h.normalize()
+                    v.normalize()
 
-                v *= vLength
-                h *= hLength
+                    rad = 75 * pi / 180.0
+                    vLength = tan(rad / 2) * 1.0
+                    hLength = vLength * (self.canvas_width / self.canvas_height)
 
-                mirror_y = self.canvas_height - event.y()
+                    v *= vLength
+                    h *= hLength
 
-                x = event.x() - self.canvas_width / 2
-                y = mirror_y - self.canvas_height / 2
+                    mirror_y = self.canvas_height - event.y()
 
-                x /= (self.canvas_width / 2)
-                y /= (self.canvas_height / 2)
-                camerapos = Vector3(self.offset_x, self.offset_z, self.camera_height)
+                    x = event.x() - self.canvas_width / 2
+                    y = mirror_y - self.canvas_height / 2
 
-                pos = camerapos + view * 1.01 + h * x + v * y
+                    x /= (self.canvas_width / 2)
+                    y /= (self.canvas_height / 2)
+                    camerapos = Vector3(self.offset_x, self.offset_z, self.camera_height)
 
-                self.selectionbox_projected_origin = pos
+                    pos = camerapos + view * 1.01 + h * x + v * y
 
+                    self.selectionbox_projected_origin = pos
+
+                elif self.mousemode == MOUSE_MODE_ADDWP:
+                    print("shooting rays")
+                    ray = self.create_ray_from_mouseclick(event.x(), event.y())
+                    place_at = None
+
+                    if self.collision is not None:
+                        print("colliding with collision")
+                        verts = self.collision.verts
+                        faces = self.collision.faces
+
+                        best_distance = None
+
+                        for tri in self.collision.triangles:
+                            collision = ray.collide(tri)
+
+                            if collision is not False:
+                                point, distance = collision
+
+                                if best_distance is None or distance < best_distance:
+                                    place_at = point
+                                    best_distance = distance
+
+                    if place_at is None:
+                        print("colliding with plane")
+                        front = Vector3(1.0, 0.0, 0.0)
+                        left = Vector3(0.0, 1.0, 0.0)
+                        plane = Plane(Vector3(0.0, 0.0, 0.0), front, left)
+
+                        collision = ray.collide_plane(plane)
+                        if collision is not False:
+                            place_at, _ = collision
+
+                    if place_at is not None:
+                        print("collided")
+                        self.create_waypoint_3d.emit(place_at.x, place_at.z, -place_at.y)
+                    else:
+                        print("nothing collided, aw")
+
+                elif self.mousemode == MOUSE_MODE_MOVEWP:
+                    mouse_x, mouse_z = (event.x(), event.y())
+                    ray = self.create_ray_from_mouseclick(event.x(), event.y())
+
+                    if len(self.selected) > 0:
+                        average_height = 0
+                        for pikminobj in self.selected:
+                            average_height += pikminobj.y+pikminobj.offset_y
+                        average_height = average_height / len(self.selected)
+
+                        self.move_collision_plane.origin.z = average_height
+                        collision = ray.collide_plane(self.move_collision_plane)
+                        if collision is not False:
+                            point, d = collision
+                            movetox, movetoz = point.x, point.y
+
+                            if self.rotation_is_pressed and len(self.selected) == 1:
+                                obj = self.selected[0]
+                                relx = obj.x - movetox
+                                relz = -obj.z - movetoz
+
+                                self.rotate_current.emit(obj, degrees(atan2(-relx, relz)))
+
+                            elif not self.rotation_is_pressed:
+                                if len(self.selected) > 0:
+                                    sumx, sumz = 0, 0
+                                    wpcount = len(self.selected)
+                                    for obj in self.selected:
+                                        sumx += obj.x
+                                        sumz += obj.z
+
+                                    x = sumx/float(wpcount)
+                                    z = sumz/float(wpcount)
+
+                                    self.move_points.emit(movetox-x, -movetoz-z)
     @catch_exception
     def mouseMoveEvent(self, event):
         if self.mode == MODE_TOPDOWN:
@@ -1040,45 +1164,80 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                 self.do_redraw()
 
             if self.left_button_down:
-                self.camera_direction.normalize()
+                if self.mousemode == MOUSE_MODE_NONE and self.selectionbox_projected_2d is not None:
+                    self.camera_direction.normalize()
 
-                view = self.camera_direction.copy()
+                    view = self.camera_direction.copy()
 
-                h = view.cross(Vector3(0, 0, 1))
-                v = h.cross(view)
+                    h = view.cross(Vector3(0, 0, 1))
+                    v = h.cross(view)
 
-                h.normalize()
-                v.normalize()
+                    h.normalize()
+                    v.normalize()
 
-                rad = 75 * pi / 180.0
-                vLength = tan(rad / 2) * 1.0
-                hLength = vLength * (self.canvas_width/self.canvas_height)
+                    rad = 75 * pi / 180.0
+                    vLength = tan(rad / 2) * 1.0
+                    hLength = vLength * (self.canvas_width/self.canvas_height)
 
-                v *= vLength
-                h *= hLength
+                    v *= vLength
+                    h *= hLength
 
-                mirror_y = self.canvas_height - event.y()
-                halfwidth = self.canvas_width/2
-                halfheight = self.canvas_height / 2
+                    mirror_y = self.canvas_height - event.y()
+                    halfwidth = self.canvas_width/2
+                    halfheight = self.canvas_height / 2
 
-                x = event.x() - halfwidth
-                y = (self.canvas_height - event.y()) - halfheight
-                startx = (self.selectionbox_projected_2d[0] - halfwidth) / halfwidth
-                starty = (self.canvas_height - self.selectionbox_projected_2d[1] - halfheight)/halfheight
+                    x = event.x() - halfwidth
+                    y = (self.canvas_height - event.y()) - halfheight
+                    startx = (self.selectionbox_projected_2d[0] - halfwidth) / halfwidth
+                    starty = (self.canvas_height - self.selectionbox_projected_2d[1] - halfheight)/halfheight
 
-                x /= halfwidth
-                y /= halfheight
-                camerapos = Vector3(self.offset_x, self.offset_z, self.camera_height)
+                    x /= halfwidth
+                    y /= halfheight
+                    camerapos = Vector3(self.offset_x, self.offset_z, self.camera_height)
 
 
-                self.selectionbox_projected_coords = (
-                    camerapos + view * 1.01 + h * startx + v * y,
-                    camerapos + view * 1.01 + h * x + v * y,
-                    camerapos + view * 1.01 + h * x + v * starty
-                )
+                    self.selectionbox_projected_coords = (
+                        camerapos + view * 1.01 + h * startx + v * y,
+                        camerapos + view * 1.01 + h * x + v * y,
+                        camerapos + view * 1.01 + h * x + v * starty
+                    )
 
-                #print("ok", self.selectionbox_projected_right)
-                self.do_redraw()
+                    #print("ok", self.selectionbox_projected_right)
+                    self.do_redraw()
+                if self.mousemode == MOUSE_MODE_MOVEWP:
+                    ray = self.create_ray_from_mouseclick(event.x(), event.y())
+
+                    if len(self.selected) > 0:
+                        average_height = 0
+                        for pikminobj in self.selected:
+                            average_height += pikminobj.y + pikminobj.offset_y
+                        average_height = average_height / len(self.selected)
+
+                        self.move_collision_plane.origin.z = average_height
+                        collision = ray.collide_plane(self.move_collision_plane)
+                        if collision is not False:
+                            point, d = collision
+                            movetox, movetoz = point.x, point.y
+
+                            if self.rotation_is_pressed and len(self.selected) == 1:
+                                obj = self.selected[0]
+                                relx = obj.x - movetox
+                                relz = -obj.z - movetoz
+
+                                self.rotate_current.emit(obj, degrees(atan2(-relx, relz)))
+
+                            elif not self.rotation_is_pressed:
+                                if len(self.selected) > 0:
+                                    sumx, sumz = 0, 0
+                                    wpcount = len(self.selected)
+                                    for obj in self.selected:
+                                        sumx += obj.x
+                                        sumz += obj.z
+
+                                    x = sumx / float(wpcount)
+                                    z = sumz / float(wpcount)
+
+                                    self.move_points.emit(movetox - x, -movetoz - z)
 
     @catch_exception
     def mouseReleaseEvent(self, event):
@@ -1105,32 +1264,34 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                 self.last_move = None
                 self.right_button_down = False
             if not event.buttons() & Qt.LeftButton and self.left_button_down:
-                startx, starty = self.selectionbox_projected_2d
-
-                if startx > event.x():
-                    minx = event.x()
-                    maxx = startx
-                else:
-                    minx = startx
-                    maxx = event.x()
-
-                if starty > event.y():
-                    miny = event.y()
-                    maxy = starty
-                else:
-                    miny = starty
-                    maxy = event.y()
-                width = maxx - minx
-                height = maxy - miny
-
-                self.selection_queue.append((minx, maxy, width+1, height+1,
-                                             self.shift_is_pressed))
                 self.left_button_down = False
-                self.selectionbox_projected_2d = None
-                self.selectionbox_projected_origin = None
-                self.selectionbox_projected_right = None
-                self.selectionbox_projected_coords = None
-                self.do_redraw()
+                if self.mousemode == MOUSE_MODE_NONE:
+                    startx, starty = self.selectionbox_projected_2d
+
+                    if startx > event.x():
+                        minx = event.x()
+                        maxx = startx
+                    else:
+                        minx = startx
+                        maxx = event.x()
+
+                    if starty > event.y():
+                        miny = event.y()
+                        maxy = starty
+                    else:
+                        miny = starty
+                        maxy = event.y()
+                    width = maxx - minx
+                    height = maxy - miny
+
+                    self.selection_queue.append((minx, maxy, width+1, height+1,
+                                                 self.shift_is_pressed))
+
+                    self.selectionbox_projected_2d = None
+                    self.selectionbox_projected_origin = None
+                    self.selectionbox_projected_right = None
+                    self.selectionbox_projected_coords = None
+                    self.do_redraw()
 
     def wheelEvent(self, event):
         wheel_delta = event.angleDelta().y()
@@ -1159,6 +1320,37 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
 
         self.zoom(fac)
 
+    def create_ray_from_mouseclick(self, mousex, mousey):
+        self.camera_direction.normalize()
+        height = self.canvas_height
+        width = self.canvas_width
+
+        view = self.camera_direction.copy()
+
+        h = view.cross(Vector3(0, 0, 1))
+        v = h.cross(view)
+
+        h.normalize()
+        v.normalize()
+
+        rad = 75 * pi / 180.0
+        vLength = tan(rad / 2) * 1.0
+        hLength = vLength * (width / height)
+
+        v *= vLength
+        h *= hLength
+
+        x = mousex - width / 2
+        y = height - mousey- height / 2
+
+        x /= (width / 2)
+        y /= (height / 2)
+        camerapos = Vector3(self.offset_x, self.offset_z, self.camera_height)
+
+        pos = camerapos + view * 1.0 + h * x + v * y
+        dir = pos - camerapos
+
+        return Line(pos, dir)
 
 class PikminSideWidget(QWidget):
     def __init__(self, *args, **kwargs):

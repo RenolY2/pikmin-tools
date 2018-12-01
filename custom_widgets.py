@@ -15,7 +15,7 @@ from PyQt5.QtCore import QSize, pyqtSignal, QPoint, QRect
 from PyQt5.QtCore import Qt
 
 from helper_functions import calc_zoom_in_factor, calc_zoom_out_factor
-
+from lib.vectors import Triangle, Vector3
 ENTITY_SIZE = 10
 
 DEFAULT_ENTITY = QColor("black")
@@ -31,6 +31,8 @@ MOUSE_MODE_NONE = 0
 MOUSE_MODE_MOVEWP = 1
 MOUSE_MODE_ADDWP = 2
 MOUSE_MODE_CONNECTWP = 3
+
+
 
 
 def catch_exception(func):
@@ -917,10 +919,21 @@ def cross_product(v1, v2):
     cross_z = v1[0]*v2[1] - v1[1]*v2[0]
     return cross_x, cross_y, cross_z
 
+
 class Collision(object):
     def __init__(self, verts, faces):
         self.verts = verts
         self.faces = faces
+        self.triangles = []
+        for v1i, v2i, v3i in self.faces:
+            x, y, z = verts[v1i[0]-1]
+            v1 = Vector3(x, -z, y)
+            x, y, z = verts[v2i[0] - 1]
+            v2 = Vector3(x, -z, y)
+            x, y, z = verts[v3i[0] - 1]
+            v3 = Vector3(x, -z, y)
+
+            self.triangles.append(Triangle(v1,v2,v3))
 
         cell_size = 100
 

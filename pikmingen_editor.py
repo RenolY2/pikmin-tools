@@ -1,6 +1,6 @@
 import traceback
 from timeit import default_timer
-
+from io import TextIOWrapper
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
 from PyQt5.QtCore import Qt
@@ -13,7 +13,8 @@ import PyQt5.QtGui as QtGui
 
 import opengltext
 import py_obj
-from libpiktxt import PikminGenFile
+from lib.model_rendering import Waterbox
+from libpiktxt import PikminGenFile, WaterboxTxt
 from custom_widgets import catch_exception
 from pikmingen import PikminObject
 from configuration import read_config, make_default_config, save_cfg
@@ -180,6 +181,9 @@ class GenEditor(QMainWindow):
         self.collision_load_grid_action = QAction("Load GRID.BIN", self)
         self.collision_load_grid_action.triggered.connect(self.button_load_collision_grid)
         self.collision_menu.addAction(self.collision_load_grid_action)
+        self.collision_load_waterbox_action = QAction("Load WATERBOX.TXT", self)
+        self.collision_load_waterbox_action.triggered.connect(self.button_load_waterboxes)
+        self.collision_menu.addAction(self.collision_load_waterbox_action)
 
 
         # Misc
@@ -249,6 +253,7 @@ class GenEditor(QMainWindow):
         self.pik_control.button_move_object.pressed.connect(self.button_move_objects)
         self.pikmin_gen_view.move_points.connect(self.action_move_objects)
         self.pikmin_gen_view.create_waypoint.connect(self.action_add_object)
+        self.pikmin_gen_view.create_waypoint_3d.connect(self.action_add_object_3d)
         self.pik_control.button_ground_object.pressed.connect(self.action_ground_objects)
         self.pik_control.button_remove_object.pressed.connect(self.action_delete_objects)
 
@@ -273,6 +278,40 @@ class GenEditor(QMainWindow):
             self.edit_spawn_window.closing.connect(self.action_close_edit_startpos_window)
             self.edit_spawn_window.button_savetext.pressed.connect(self.action_save_startpos)
             self.edit_spawn_window.show()
+
+    @catch_exception_with_dialog
+    def button_load_waterboxes(self, _):
+        filepath, choosentype = QFileDialog.getOpenFileName(
+            self, "Open File",
+            self.pathsconfig["collision"],
+            "waterbox.txt (*.txt);;Archived waterbox.txt (*.szs,*.arc);;All files (*)")
+
+        if filepath:
+            print("Resetting editor")
+            #self.reset()
+            print("Reset done")
+            print("Chosen file type:", choosentype)
+            if choosentype == "Archived waterbox.txt (*.szs,*.arc)" \
+                    or filepath.endswith(".szs") or filepath.endswith(".arc"):
+                with open(filepath, "rb") as f:
+                    archive = Archive.from_file(f)
+                    #try:
+                    f = archive["text/waterbox.txt"]
+                    #print(f.read())
+                    f.seek(0)
+                    waterboxfile = WaterboxTxt()
+                    waterboxfile.from_file(TextIOWrapper(f, encoding="shift_jis-2004", errors="backslashreplace"))
+            else:
+                with open(filepath, "r", encoding="shift_jis-2004", errors="backslashreplace") as f:
+                    waterboxfile = WaterboxTxt()
+                    waterboxfile.from_file(f)
+
+            self.pikmin_gen_view.waterboxes = []
+            for waterboxcoords in waterboxfile.waterboxes:
+                x1, x2 = waterboxcoords[0], waterboxcoords[3]
+                y1, y2 = -waterboxcoords[2], -waterboxcoords[5]
+                z1, z2 = waterboxcoords[1], waterboxcoords[4]
+                self.pikmin_gen_view.waterboxes.append(Waterbox((x1, y1, z1), (x2, y2, z2)))
 
     #@catch_exception
     def button_load_level(self):
@@ -504,6 +543,22 @@ class GenEditor(QMainWindow):
         self.history.add_history_addobject(newobj)
         self.set_has_unsaved_changes(True)
 
+    @catch_exception
+    def action_add_object_3d(self, x, y, z):
+        newobj = self.object_to_be_added.copy()
+
+        newobj.position_x = newobj.x = round(x, 6)
+        newobj.position_y = newobj.y = round(y, 6)
+        newobj.position_z = newobj.z = round(z, 6)
+        newobj.offset_x = newobj.offset_y = newobj.offset_z = 0.0
+
+        self.pikmin_gen_file.objects.append(newobj)
+        # self.pikmin_gen_view.update()
+        self.pikmin_gen_view.do_redraw()
+
+        self.history.add_history_addobject(newobj)
+        self.set_has_unsaved_changes(True)
+
     def button_move_objects(self):
         if self.pikmin_gen_view.mousemode == pikwidgets.MOUSE_MODE_MOVEWP:
             self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
@@ -616,6 +671,7 @@ class GenEditor(QMainWindow):
             obj = self.pikmin_gen_view.selected[0]
             self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
         self.set_has_unsaved_changes(True)
+        self.pikmin_gen_view.do_redraw()
 
     def action_delete_objects(self):
         tobedeleted = []
