@@ -1,0 +1,17 @@
+{
+	{v0.1} # Version 
+	3 # Reserved 
+	0 # Days till resurrection 
+	138 226 130 204 144 240 130 86 130 101 129 105 121 97 107 117 115 104 105 109 97 95 51 130 204 131 116 131 94 129 106 0 # 岩の栓７Ｆ（yakushima_3のフタ） 
+	1757.594142 -97.000999 1605.341303 # Position 
+	0 0 0 # Offset 
+	{item} {0002} 
+	{
+		{barl} # Item ID 
+		0.0 0.0 0.0 # rotation 
+		{0000} # item local version 
+	}
+	{
+		{_eof}
+	}
+}
