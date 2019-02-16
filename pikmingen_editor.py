@@ -219,6 +219,7 @@ class GenEditor(QMainWindow):
         self.pikmin_gen_view.change_from_topdown_to_3d()
         self.change_to_topdownview_action.setChecked(False)
         self.change_to_3dview_action.setChecked(True)
+        self.statusbar.clearMessage()
 
     def setup_ui_toolbar(self):
         # self.toolbar = QtWidgets.QToolBar("Test", self)
@@ -252,6 +253,7 @@ class GenEditor(QMainWindow):
         self.pik_control.button_add_object.pressed.connect(self.button_open_add_item_window)
         self.pik_control.button_move_object.pressed.connect(self.button_move_objects)
         self.pikmin_gen_view.move_points.connect(self.action_move_objects)
+        self.pikmin_gen_view.height_update.connect(self.action_change_object_heights)
         self.pikmin_gen_view.create_waypoint.connect(self.action_add_object)
         self.pikmin_gen_view.create_waypoint_3d.connect(self.action_add_object_3d)
         self.pik_control.button_ground_object.pressed.connect(self.action_ground_objects)
@@ -284,7 +286,7 @@ class GenEditor(QMainWindow):
         filepath, choosentype = QFileDialog.getOpenFileName(
             self, "Open File",
             self.pathsconfig["collision"],
-            "waterbox.txt (*.txt);;Archived waterbox.txt (*.szs,*.arc);;All files (*)")
+            "waterbox.txt (*.txt);;Archived waterbox.txt (*.szs *.arc);;All files (*)")
 
         if filepath:
             print("Resetting editor")
@@ -306,12 +308,15 @@ class GenEditor(QMainWindow):
                     waterboxfile = WaterboxTxt()
                     waterboxfile.from_file(f)
 
-            self.pikmin_gen_view.waterboxes = []
-            for waterboxcoords in waterboxfile.waterboxes:
-                x1, x2 = waterboxcoords[0], waterboxcoords[3]
-                y1, y2 = -waterboxcoords[2], -waterboxcoords[5]
-                z1, z2 = waterboxcoords[1], waterboxcoords[4]
-                self.pikmin_gen_view.waterboxes.append(Waterbox((x1, y1, z1), (x2, y2, z2)))
+            self.setup_waterboxes(waterboxfile)
+
+    def setup_waterboxes(self, waterboxfile):
+        self.pikmin_gen_view.waterboxes = []
+        for waterboxcoords in waterboxfile.waterboxes:
+            x1, x2 = waterboxcoords[0], waterboxcoords[3]
+            y1, y2 = -waterboxcoords[2], -waterboxcoords[5]
+            z1, z2 = waterboxcoords[1], waterboxcoords[4]
+            self.pikmin_gen_view.waterboxes.append(Waterbox((x1, y1, z1), (x2, y2, z2)))
 
     #@catch_exception
     def button_load_level(self):
@@ -328,25 +333,28 @@ class GenEditor(QMainWindow):
 
             with open(filepath, "r", encoding="shift_jis-2004", errors="backslashreplace") as f:
                 try:
-                    self.pikmin_gen_file = PikminGenFile()
-                    self.pikmin_gen_file.from_file(f)
-
-                    self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
-                    #self.pikmin_gen_view.update()
-                    self.pikmin_gen_view.do_redraw()
-
-                    print("File loaded")
-                    # self.bw_map_screen.update()
-                    # path_parts = path.split(filepath)
-                    self.set_base_window_title(filepath)
-                    self.pathsconfig["gen"] = filepath
-                    save_cfg(self.configuration)
-                    self.current_gen_path = filepath
+                    pikmin_gen_file = PikminGenFile()
+                    pikmin_gen_file.from_file(f)
+                    self.setup_gen_file(pikmin_gen_file, filepath)
 
                 except Exception as error:
                     print("Error appeared while loading:", error)
                     traceback.print_exc()
                     open_error_dialog(str(error), self)
+
+    def setup_gen_file(self, pikmin_gen_file, filepath):
+        self.pikmin_gen_file = pikmin_gen_file
+        self.pikmin_gen_view.pikmin_generators = self.pikmin_gen_file
+        # self.pikmin_gen_view.update()
+        self.pikmin_gen_view.do_redraw()
+
+        print("File loaded")
+        # self.bw_map_screen.update()
+        # path_parts = path.split(filepath)
+        self.set_base_window_title(filepath)
+        self.pathsconfig["gen"] = filepath
+        save_cfg(self.configuration)
+        self.current_gen_path = filepath
 
     def button_save_level(self):
         if self.current_gen_path is not None:
@@ -400,20 +408,7 @@ class GenEditor(QMainWindow):
             with open(filepath, "r") as f:
                 verts, faces, normals = py_obj.read_obj(f)
 
-            width = int(self.configuration["model render"]["Width"])
-            height = int(self.configuration["model render"]["Height"])
-            tmprenderwindow = opengltext.TempRenderWindow(verts, faces, render_res=(width, height))
-            tmprenderwindow.show()
-
-            framebuffer = tmprenderwindow.widget.grabFramebuffer()
-            framebuffer.save("tmp_image.png", "PNG")
-            self.pikmin_gen_view.level_image = framebuffer
-
-            tmprenderwindow.destroy()
-
-            self.pikmin_gen_view.set_collision(verts, faces)
-            self.pathsconfig["collision"] = filepath
-            save_cfg(self.configuration)
+            self.setup_collision(verts, faces, filepath)
 
         except Exception as e:
             traceback.print_exc()
@@ -424,7 +419,7 @@ class GenEditor(QMainWindow):
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
                 self.pathsconfig["collision"],
-                "Archived grid.bin (texts.arc, texts.szs);;Grid.bin (*.bin);;All files (*)")
+                "Archived grid.bin (*.arc *.szs);;Grid.bin (*.bin);;All files (*)")
             if filepath:
                 if (choosentype == "Archived grid.bin (texts.arc, texts.szs)"
                         or filepath.endswith(".szs")
@@ -441,24 +436,17 @@ class GenEditor(QMainWindow):
 
                 verts = collision.vertices
                 faces = [face[0] for face in collision.faces]
-                width = int(self.configuration["model render"]["Width"])
-                height = int(self.configuration["model render"]["Height"])
-                """tmprenderwindow = opengltext.TempRenderWindow(verts, faces, render_res=(width, height))
-                tmprenderwindow.show()
 
-                framebuffer = tmprenderwindow.widget.grabFramebuffer()
-                framebuffer.save("tmp_image.png", "PNG")
-                self.pikmin_gen_view.level_image = framebuffer
-
-                tmprenderwindow.destroy()"""
-
-                self.pikmin_gen_view.set_collision(verts, faces)
-                self.pathsconfig["collision"] = filepath
-                save_cfg(self.configuration)
+                self.setup_collision(verts, faces, filepath)
 
         except Exception as e:
             traceback.print_exc()
             open_error_dialog(str(e), self)
+
+    def setup_collision(self, verts, faces, filepath):
+        self.pikmin_gen_view.set_collision(verts, faces)
+        self.pathsconfig["collision"] = filepath
+        save_cfg(self.configuration)
 
     def action_close_edit_startpos_window(self):
         self.edit_spawn_window.destroy()
@@ -511,7 +499,7 @@ class GenEditor(QMainWindow):
                 self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_ADDWP)
                 self.add_object_window.destroy()
                 self.add_object_window = None
-                self.pikmin_gen_view.setContextMenuPolicy(Qt.DefaultContextMenu)
+                #self.pikmin_gen_view.setContextMenuPolicy(Qt.DefaultContextMenu)
 
 
     @catch_exception
@@ -606,11 +594,38 @@ class GenEditor(QMainWindow):
         self.pikmin_gen_view.do_redraw()
         self.set_has_unsaved_changes(True)
 
+
+    @catch_exception
+    def action_change_object_heights(self, deltay):
+        for obj in self.pikmin_gen_view.selected:
+            obj.y += deltay
+            obj.y = round(obj.y, 6)
+            obj.position_y = obj.y
+            obj.offset_y = 0
+
+        if len(self.pikmin_gen_view.selected) == 1:
+            obj = self.pikmin_gen_view.selected[0]
+            self.pik_control.set_info(obj, (obj.x, obj.y, obj.z), obj.get_rotation())
+
+        #self.pikmin_gen_view.update()
+        self.pikmin_gen_view.do_redraw()
+        self.set_has_unsaved_changes(True)
+
     def keyPressEvent(self, event: QtGui.QKeyEvent):
+
+        if event.key() == Qt.Key_Escape:
+            self.pikmin_gen_view.set_mouse_mode(pikwidgets.MOUSE_MODE_NONE)
+            self.pik_control.button_add_object.setChecked(False)
+            self.pik_control.button_move_object.setChecked(False)
+            if self.add_object_window is not None:
+                self.add_object_window.close()
+
         if event.key() == Qt.Key_Shift:
             self.pikmin_gen_view.shift_is_pressed = True
         elif event.key() == Qt.Key_R:
             self.pikmin_gen_view.rotation_is_pressed = True
+        elif event.key() == Qt.Key_H:
+            self.pikmin_gen_view.change_height_is_pressed = True
 
         if event.key() == Qt.Key_W:
             self.pikmin_gen_view.MOVE_FORWARD = 1
@@ -635,6 +650,8 @@ class GenEditor(QMainWindow):
             self.pikmin_gen_view.shift_is_pressed = False
         elif event.key() == Qt.Key_R:
             self.pikmin_gen_view.rotation_is_pressed = False
+        elif event.key() == Qt.Key_H:
+            self.pikmin_gen_view.change_height_is_pressed = False
 
         if event.key() == Qt.Key_W:
             self.pikmin_gen_view.MOVE_FORWARD = 0
@@ -933,20 +950,85 @@ class EditorHistory(object):
 if __name__ == "__main__":
     import sys
     import platform
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inputgen", default=None,
+                        help="Path to generator file to be loaded.")
+    parser.add_argument("--collision", default=None,
+                        help="Path to collision to be loaded.")
+    parser.add_argument("--waterbox", default=None,
+                        help="Path to waterbox file to be loaded.")
+
+    args = parser.parse_args()
 
     app = QApplication(sys.argv)
+
     if platform.system() == "Windows":
         import ctypes
         myappid = 'P2GeneratorsEditor'  # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     with open("log.txt", "w") as f:
-        #sys.stdout = f
-        #sys.stderr = f
+        sys.stdout = f
+        sys.stderr = f
         print("Python version: ", sys.version)
         pikmin_gui = GenEditor()
         pikmin_gui.setWindowIcon(QtGui.QIcon('resources/icon.ico'))
+
+        if args.inputgen is not None:
+            with open(args.inputgen, "r", encoding="shift_jis-2004", errors="backslashreplace") as f:
+                pikmin_gen_file = PikminGenFile()
+                pikmin_gen_file.from_file(f)
+
+            pikmin_gui.setup_gen_file(pikmin_gen_file, args.inputgen)
+
         pikmin_gui.show()
+
+        if args.collision is not None:
+            if args.collision.endswith(".obj"):
+                with open(args.collision, "r") as f:
+                    verts, faces, normals = py_obj.read_obj(f)
+
+            elif args.collision.endswith(".bin"):
+                with open(args.collision, "rb") as f:
+                    collision = py_obj.PikminCollision(f)
+                verts = collision.vertices
+                faces = [face[0] for face in collision.faces]
+
+            elif args.collision.endswith(".szs") or args.collision.endswith(".arc"):
+                with open(args.collision, "rb") as f:
+                    archive = Archive.from_file(f)
+                f = archive["text/grid.bin"]
+                collision = py_obj.PikminCollision(f)
+
+                verts = collision.vertices
+                faces = [face[0] for face in collision.faces]
+
+            else:
+                raise RuntimeError("Unknown collision file type:", args.collision)
+
+            pikmin_gui.setup_collision(verts, faces, args.collision)
+
+        if args.waterbox is not None:
+            if args.waterbox.endswith(".txt"):
+                with open(args.waterbox, "r", encoding="shift_jis-2004", errors="backslashreplace") as f:
+                    waterboxfile = WaterboxTxt()
+                    waterboxfile.from_file(f)
+            elif args.waterbox.endswith(".szs") or args.waterbox.endwith(".arc"):
+                with open(args.waterbox, "rb") as f:
+                    archive = Archive.from_file(f)
+                    # try:
+                    f = archive["text/waterbox.txt"]
+                    # print(f.read())
+                    f.seek(0)
+                    waterboxfile = WaterboxTxt()
+                    waterboxfile.from_file(TextIOWrapper(f, encoding="shift_jis-2004", errors="backslashreplace"))
+            else:
+                raise RuntimeError("Unknown waterbox file type:", args.waterbox)
+
+            pikmin_gui.setup_waterboxes(waterboxfile)
+
         err_code = app.exec()
 
     sys.exit(err_code)
