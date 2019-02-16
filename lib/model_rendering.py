@@ -10,6 +10,7 @@ class Model(object):
         pass
 
 ALPHA = 0.8
+
 class Waterbox(Model):
     def __init__(self, corner_bottomleft, corner_topright):
         self.corner_bottomleft = corner_bottomleft
