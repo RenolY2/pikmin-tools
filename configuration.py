@@ -29,13 +29,12 @@ def make_default_config():
         "InvertZoom": "False",
         "GroundObjectsWhenMoving": "False",
         "GroundObjectsWhenAdding": "True",
-        "renderStartPos": "False",
         "wasdscrolling_speed": "200",
         "wasdscrolling_speedupfactor": "3"
     }
     cfg["model render"] = {
-        "Width": "1000",
-        "Height": "1000"
+        "Width": "2000",
+        "Height": "2000"
     }
 
     with open("piktool.ini", "w") as f:
