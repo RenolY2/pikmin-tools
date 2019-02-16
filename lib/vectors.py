@@ -103,9 +103,16 @@ class Vector4(Vector3):
 class Plane(object):
     def __init__(self, origin, vec1, vec2): # a point and two vectors defining the plane
         self.origin = origin
-        self.vec1 = vec1
-        self.vec2 = vec2
+        self._vec1 = vec1
+        self._vec2 = vec2
         self.normal = vec1.cross(vec2)
+
+    @classmethod
+    def from_implicit(cls, origin, normal):
+        dummyvec = Vector3(0.0, 0.0, 0.0)
+        plane = cls(origin, dummyvec, dummyvec)
+        plane.normal = normal
+        return plane
 
     def point_is_on_plane(self, vec):
         return (vec-self.origin).dot(self.normal) == 0
