@@ -140,19 +140,9 @@ class EditorMainWindow(QMainWindow):
 
                 with open(filepath, "r") as f:
                     try:
-                        self.pikmin_routes = RouteTxt()
-                        self.pikmin_routes.from_file(f)
-
-                        self.pikminroutes_screen.pikmin_routes = self.pikmin_routes
-                        self.pikminroutes_screen.update()
-
-                        print("ok")
-                        #self.bw_map_screen.update()
-                        path_parts = path.split(filepath)
-                        self.setWindowTitle("Routes Editor - {0}".format(filepath))
-                        self.pathsconfig["routes"] = filepath
-                        self.current_route_path = filepath
-                        save_cfg(self.configuration)
+                        pikmin_routes = RouteTxt()
+                        pikmin_routes.from_file(f)
+                        self.setup_routes(pikmin_routes, filepath)
 
                     except Exception as error:
                         print("error", error)
@@ -162,6 +152,19 @@ class EditorMainWindow(QMainWindow):
             print("errrorrr", er)
             traceback.print_exc()
         print("loaded")
+
+    def setup_routes(self, pikmin_routes, filepath):
+        self.pikmin_routes = pikmin_routes
+        self.pikminroutes_screen.pikmin_routes = self.pikmin_routes
+        self.pikminroutes_screen.update()
+
+        print("ok")
+        # self.bw_map_screen.update()
+        path_parts = path.split(filepath)
+        self.setWindowTitle("Routes Editor - {0}".format(filepath))
+        self.pathsconfig["routes"] = filepath
+        self.current_route_path = filepath
+        save_cfg(self.configuration)
 
     def button_save_level(self):
         try:
@@ -205,22 +208,7 @@ class EditorMainWindow(QMainWindow):
             with open(filepath, "r") as f:
                 verts, faces, normals = read_obj(f)
 
-            width = int(self.configuration["model render"]["Width"])
-            height = int(self.configuration["model render"]["Height"])
-
-            tmprenderwindow = TempRenderWindow(verts, faces, render_res=(width, height))
-            tmprenderwindow.show()
-
-            framebuffer = tmprenderwindow.widget.grabFramebuffer()
-            framebuffer.save("tmp_image.png", "PNG")
-            self.pikminroutes_screen.level_image = framebuffer
-
-            tmprenderwindow.destroy()
-
-            self.pikminroutes_screen.set_collision(verts, faces)
-            self.pathsconfig["collision"] = filepath
-            save_cfg(self.configuration)
-
+            self.setup_collision(verts, faces, filepath)
         except:
             traceback.print_exc()
 
@@ -229,7 +217,7 @@ class EditorMainWindow(QMainWindow):
             filepath, choosentype = QFileDialog.getOpenFileName(
                 self, "Open File",
                 self.pathsconfig["collision"],
-                "Archived grid.bin (texts.arc, texts.szs);;Grid.bin (*.bin);;All files (*)")
+                "Archived grid.bin (*.arc, *.szs);;Grid.bin (*.bin);;All files (*)")
             print(choosentype)
 
             if choosentype == "Archived grid.bin (texts.arc, texts.szs)" or filepath.endswith(".szs") or filepath.endswith(".arc"):
@@ -246,25 +234,28 @@ class EditorMainWindow(QMainWindow):
 
             verts = collision.vertices
             faces = [face[0] for face in collision.faces]
-
-            width = int(self.configuration["model render"]["Width"])
-            height = int(self.configuration["model render"]["Height"])
-
-            tmprenderwindow = TempRenderWindow(verts, faces, render_res=(width, height))
-            tmprenderwindow.show()
-
-            framebuffer = tmprenderwindow.widget.grabFramebuffer()
-            framebuffer.save("tmp_image.png", "PNG")
-            self.pikminroutes_screen.level_image = framebuffer
-
-            tmprenderwindow.destroy()
-
-            self.pikminroutes_screen.set_collision(verts, faces)
-            self.pathsconfig["routes"] = filepath
-            save_cfg(self.configuration)
+            self.setup_collision(verts, faces, filepath)
 
         except:
             traceback.print_exc()
+
+    def setup_collision(self, verts, faces, filepath):
+        width = int(self.configuration["model render"]["Width"])
+        height = int(self.configuration["model render"]["Height"])
+        print(width, height)
+
+        tmprenderwindow = TempRenderWindow(verts, faces, render_res=(width, height))
+        tmprenderwindow.show()
+
+        framebuffer = tmprenderwindow.widget.grabFramebuffer()
+        framebuffer.save("tmp_image.png", "PNG")
+        self.pikminroutes_screen.level_image = framebuffer
+
+        tmprenderwindow.destroy()
+
+        self.pikminroutes_screen.set_collision(verts, faces)
+        self.pathsconfig["routes"] = filepath
+        save_cfg(self.configuration)
 
     @catch_exception
     def event_update_lineedit(self, event):
@@ -481,7 +472,7 @@ class EditorMainWindow(QMainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1200, 850)
         MainWindow.setMinimumSize(QSize(930, 850))
-        MainWindow.setWindowTitle("Pikmin Routes Editor")
+        MainWindow.setWindowTitle("Pikmin 2 Routes Editor")
 
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -599,7 +590,17 @@ class EditorMainWindow(QMainWindow):
 if __name__ == "__main__":
     import sys
     import platform
+    import argparse
     from PyQt5 import QtGui
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inputroute", default=None,
+                        help="Path to route file to be loaded.")
+    parser.add_argument("--collision", default=None,
+                        help="Path to collision to be loaded.")
+
+    args = parser.parse_args()
+
     app = QApplication(sys.argv)
 
     if platform.system() == "Windows":
@@ -609,6 +610,39 @@ if __name__ == "__main__":
 
     route_gui = EditorMainWindow()
     route_gui.setWindowIcon(QtGui.QIcon('resources/route_editor_icon.ico'))
+
+    if args.inputroute is not None:
+        with open(args.inputroute, "r") as f:
+            pikmin_routes = RouteTxt()
+            pikmin_routes.from_file(f)
+            route_gui.setup_routes(pikmin_routes, args.inputroute)
+
+    if args.collision is not None:
+        if args.collision.endswith(".bin"):
+            with open(args.collision, "rb") as f:
+                collision = PikminCollision(f)
+
+            verts = collision.vertices
+            faces = [face[0] for face in collision.faces]
+
+        elif args.collision.endswith(".szs") or args.collision.endswith(".arc"):
+            with open(args.collision, "rb") as f:
+                archive = Archive.from_file(f)
+                f = archive["text/grid.bin"]
+                collision = PikminCollision(f)
+
+            verts = collision.vertices
+            faces = [face[0] for face in collision.faces]
+
+        elif args.collision.endswith(".obj"):
+            with open(args.collision, "r") as f:
+                verts, faces, normals = read_obj(f)
+
+        else:
+            raise RuntimeError("Unknown filetype:", args.collision)
+
+        route_gui.setup_collision(verts, faces, args.collision)
+
     route_gui.show()
     err_code = app.exec()
     #traceback.print_exc()
