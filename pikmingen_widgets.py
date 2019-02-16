@@ -103,6 +103,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
     mouse_released = pyqtSignal(QMouseEvent)
     mouse_wheel = pyqtSignal(QWheelEvent)
     position_update = pyqtSignal(QMouseEvent, tuple)
+    height_update = pyqtSignal(float)
     select_update = pyqtSignal()
     move_points = pyqtSignal(float, float)
     connect_update = pyqtSignal(int, int)
@@ -116,6 +117,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         super().__init__(*args, **kwargs)
 
         self._zoom_factor = 10
+        self.setFocusPolicy(Qt.ClickFocus)
 
         self.SIZEX = 1024#768#1024
         self.SIZEY = 1024#768#1024
@@ -185,6 +187,8 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         self.shift_is_pressed = False
         self.rotation_is_pressed = False
         self.last_drag_update = 0
+        self.change_height_is_pressed = False
+        self.last_mouse_move = None
 
         self.timer = QtCore.QTimer()
         self.timer.setInterval(2)
@@ -226,7 +230,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         self.selectionbox_projected_up = None
         self.selectionbox_projected_right = None
         self.selectionbox_projected_coords = None
-
+        self.last_position_update = 0
         self.move_collision_plane = Plane(Vector3(0.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0))
 
     @catch_exception_with_dialog
@@ -512,8 +516,9 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
 
         glVertex3f(0, -6000, offset)
         glVertex3f(0, 6000, offset)
+        glEnd()
         glLineWidth(1.0)
-
+        glBegin(GL_LINES)
         for ix in range(-6000, 6000+500, 500):
             glVertex3f(ix, -6000, offset)
             glVertex3f(ix, 6000, offset)
@@ -740,7 +745,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                             downfloortype = itemdata[4]
                             if downfloortype in self.downfloor_models:
                                 model = self.downfloor_models[downfloortype]
-                            model.render()
+                                model.render()
 
                 if pikminobject in selected:
                     glColor4f(1.0, 0.0, 0.0, 1.0)
@@ -987,7 +992,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                     else:
                         print("nothing collided, aw")
 
-                elif self.mousemode == MOUSE_MODE_MOVEWP:
+                elif self.mousemode == MOUSE_MODE_MOVEWP and not self.change_height_is_pressed:
                     mouse_x, mouse_z = (event.x(), event.y())
                     ray = self.create_ray_from_mouseclick(event.x(), event.y())
 
@@ -1127,13 +1132,12 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                             self.move_points.emit(movetox-x, (-movetoz-z))
 
 
-            if False: #True:  # self.highlighttriangle is not None:
+            if default_timer() - self.last_position_update > 0.1: #True:  # self.highlighttriangle is not None:
                 mouse_x, mouse_z = (event.x(), event.y())
-                mapx = mouse_x/scalex + midx
-                mapz = mouse_z/scalez + midz
-
+                mapx, mapz = self.mouse_coord_to_world_coord(mouse_x, mouse_z)
+                self.last_position_update = default_timer()
                 if self.collision is not None:
-                    height = self.collision.collide_ray_downwards(mapx, mapz)
+                    height = self.collision.collide_ray_downwards(mapx, -mapz)
 
                     if height is not None:
                         # self.highlighttriangle = res[1:]
@@ -1208,37 +1212,77 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                     ray = self.create_ray_from_mouseclick(event.x(), event.y())
 
                     if len(self.selected) > 0:
-                        average_height = 0
+                        average_origin = Vector3(0.0, 0.0, 0.0)
+
                         for pikminobj in self.selected:
-                            average_height += pikminobj.y + pikminobj.offset_y
-                        average_height = average_height / len(self.selected)
+                            average_origin += Vector3(pikminobj.x+pikminobj.offset_x,
+                                                      pikminobj.y+pikminobj.offset_y,
+                                                      pikminobj.z+pikminobj.offset_z)
 
-                        self.move_collision_plane.origin.z = average_height
-                        collision = ray.collide_plane(self.move_collision_plane)
-                        if collision is not False:
-                            point, d = collision
-                            movetox, movetoz = point.x, point.y
+                        average_origin = average_origin / len(self.selected)
 
-                            if self.rotation_is_pressed and len(self.selected) == 1:
-                                obj = self.selected[0]
-                                relx = obj.x - movetox
-                                relz = -obj.z - movetoz
+                        if not self.change_height_is_pressed:
+                            self.move_collision_plane.origin.z = average_origin.y
+                            collision = ray.collide_plane(self.move_collision_plane)
+                            if collision is not False:
+                                point, d = collision
+                                movetox, movetoz = point.x, point.y
 
-                                self.rotate_current.emit(obj, degrees(atan2(-relx, relz)))
+                                if self.rotation_is_pressed and len(self.selected) == 1:
+                                    obj = self.selected[0]
+                                    relx = obj.x - movetox
+                                    relz = -obj.z - movetoz
 
-                            elif not self.rotation_is_pressed:
+                                    self.rotate_current.emit(obj, degrees(atan2(-relx, relz)))
+
+                                elif not self.rotation_is_pressed:
+                                    if len(self.selected) > 0:
+                                        sumx, sumz = 0, 0
+                                        wpcount = len(self.selected)
+                                        for obj in self.selected:
+                                            sumx += obj.x
+                                            sumz += obj.z
+
+                                        x = sumx / float(wpcount)
+                                        z = sumz / float(wpcount)
+
+                                        self.move_points.emit(movetox - x, -movetoz - z)
+                        else:
+                            """
+                            # Method of raising/lowering height:
+                            # objects are moved to where the mouse goes
+                            normal = self.camera_direction.copy()
+                            normal.z = 0.0
+                            normal.normalize()
+                            tempz = average_origin.z
+                            average_origin.z = average_origin.y
+                            average_origin.y = -tempz
+
+                            collision_plane = Plane.from_implicit(average_origin, normal)
+                            collision = ray.collide_plane(collision_plane)
+                            if collision is not False:
+
+                                point, d = collision
+
+                                delta_y = point.z - average_origin.z
+                                print("hit", point, average_origin)
+                                print(delta_y, normal)
                                 if len(self.selected) > 0:
-                                    sumx, sumz = 0, 0
-                                    wpcount = len(self.selected)
-                                    for obj in self.selected:
-                                        sumx += obj.x
-                                        sumz += obj.z
+                                    self.height_update.emit(delta_y)"""
 
-                                    x = sumx / float(wpcount)
-                                    z = sumz / float(wpcount)
+                            tempz = average_origin.z
+                            average_origin.z = average_origin.y
+                            average_origin.y = -tempz
+                            campos = Vector3(self.offset_x, self.offset_z, self.camera_height)
+                            dist = (campos - average_origin).norm()
+                            fac = min(5.0, max(0.5, dist/200.0))
+                            print(dist, fac)
+                            delta_height = -1*(event.y() - self.last_mouse_move[1])
+                            if len(self.selected) > 0:
+                                self.height_update.emit(delta_height*fac)
 
-                                    self.move_points.emit(movetox - x, -movetoz - z)
-
+        self.last_mouse_move = (event.x(), event.y()
+                                )
     @catch_exception
     def mouseReleaseEvent(self, event):
         if self.mode == MODE_TOPDOWN:
@@ -1351,6 +1395,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
         dir = pos - camerapos
 
         return Line(pos, dir)
+
 
 class PikminSideWidget(QWidget):
     def __init__(self, *args, **kwargs):
