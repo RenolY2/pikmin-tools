@@ -258,13 +258,13 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
 
 
         self.onion_models = {
-            pikmingen.ONYN_BLUEONION: TexturedPlane(47, 47,
+            pikmingen.ONYN_BLUEONION: TexturedPlane(47*2, 47*2,
                                                     QtGui.QImage("resources/generic_circle.png", "png")),
-            pikmingen.ONYN_REDONION: TexturedPlane(47, 47,
+            pikmingen.ONYN_REDONION: TexturedPlane(47*2, 47*2,
                                                     QtGui.QImage("resources/generic_circle.png", "png")),
-            pikmingen.ONYN_YELLOWONION: TexturedPlane(47, 47,
+            pikmingen.ONYN_YELLOWONION: TexturedPlane(47*2, 47*2,
                                                     QtGui.QImage("resources/generic_circle.png", "png")),
-            pikmingen.ONYN_ROCKET: TexturedPlane(55, 55,
+            pikmingen.ONYN_ROCKET: TexturedPlane(55*2, 55*2,
                                                     QtGui.QImage("resources/generic_circle.png", "png"))
         }
 
@@ -282,7 +282,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                                QtGui.QImage("resources/paperbag.png", "png"))
         }
 
-        self.generic_object = TexturedPlane(20, 20, QtGui.QImage("resources/generic_circle.png", "png"))
+        self.generic_object = TexturedPlane(20*2, 20*2, QtGui.QImage("resources/generic_circle.png", "png"))
 
         self.rotation_visualizer = glGenLists(1)
         glNewList(self.rotation_visualizer, GL_COMPILE)
@@ -758,6 +758,9 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                 glPushMatrix()
                 glTranslatef(x, -z, y+2)
 
+                angle = pikminobject.get_horizontal_rotation()
+                if angle is not None:
+                    glRotate(angle + 180, 0, 0, 1)
                 if name in self.onion_models:
                     self.onion_models[name].render()
                 else:
@@ -766,7 +769,7 @@ class GenMapViewer(QtWidgets.QOpenGLWidget):
                 if pikminobject in selected:
                     angle = pikminobject.get_horizontal_rotation()
                     if angle is not None:
-                        glRotate(angle + 180, 0, 0, 1)
+                        #glRotate(angle + 180, 0, 0, 1)
                         glDisable(GL_ALPHA_TEST)
                         glCallList(self.rotation_visualizer)
                         glEnable(GL_ALPHA_TEST)
