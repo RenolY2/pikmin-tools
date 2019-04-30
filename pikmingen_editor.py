@@ -681,6 +681,12 @@ class GenEditor(QMainWindow):
             height = self.pikmin_gen_view.collision.collide_ray_downwards(obj.x, obj.z)
 
             if height is not None:
+                if obj.object_type == "{item}":
+                    if obj.get_useful_object_name().startswith("Small Block")\
+                            or obj.get_useful_object_name().startswith("Normal Block")\
+                            or obj.get_useful_object_name().startswith("Paper Bag"):
+                        height += 45.0
+
                 obj.position_y = obj.y = round(height, 6)
                 obj.offset_y = 0.0
 
