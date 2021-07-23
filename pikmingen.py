@@ -482,7 +482,7 @@ class PikminObject(object):
                 if bridgetype in BRIDGES:
                     return BRIDGES[bridgetype]
                 else:
-                    return "<invalid bridge type>"
+                    return "<unknown bridge type:{0}>".format(bridgetype)
             elif subtype == "{gate}":
                 return GATE_SAND
             elif subtype == "{dgat}":
@@ -606,7 +606,11 @@ class PikminObject(object):
             name = "<failed to decode identifier>"
 
         return name
-
+    
+    def add_remaining_data_if_exists(self, node, data, n):
+        if len(data) > n:
+            node.extend(data[n:])
+    
     def to_textnode(self):
         textnode = TextNode()
 
@@ -680,25 +684,42 @@ class PikminObject(object):
                     newitemdata.append([itemdata[5], "# Behaviour: 0=normal, 1=seesaw"])
                     newitemdata.append([itemdata[6],
                                         "# ID of this downfloor. If set to seesaw, there needs to be another dwfl with same ID."])
+                    
+                    self.add_remaining_data_if_exists(newitemdata, itemdata, 7)
+                    
                 elif itemid == "{brdg}":
                     assert_notlist(itemdata[3])
                     newitemdata.append([itemdata[3], "# Bridge type: 0=short, 1=slanted, 2=long"])
+                    
+                    self.add_remaining_data_if_exists(newitemdata, itemdata, 3)
+                    
                 elif itemid == "{dgat}":
                     assert_notlist(itemdata[3])
                     newitemdata.append([itemdata[3], "# Gate Health"])
+                    
+                    self.add_remaining_data_if_exists(newitemdata, itemdata, 4)
+                    
                 elif itemid == "{gate}":
                     assert_notlist(itemdata[3])
                     assert_notlist(itemdata[4])
                     newitemdata.append([itemdata[3], "# Gate Health"])
                     newitemdata.append([itemdata[4], "# Color: 0=bright, 1=dark"])
+                    
+                    self.add_remaining_data_if_exists(newitemdata, itemdata, 5)
                 elif itemid == "{onyn}":
                     assert_notlist(itemdata[3])
                     assert_notlist(itemdata[4])
                     newitemdata.append([itemdata[3], "# Onion type: 0=blue, 1=red, 2=yellow, 4=rocket"])
                     newitemdata.append([itemdata[4], "# after boot? true==1"])
+                    
+                    self.add_remaining_data_if_exists(newitemdata, itemdata, 5)
+                    
                 elif itemid == "{plnt}":
                     assert_notlist(itemdata[3])
                     newitemdata.append([itemdata[3], "# Berry type: 0=Red, 1=purple, 2=mixed"])
+                    
+                    self.add_remaining_data_if_exists(newitemdata, itemdata, 4)
+                    
                 else:
                     if len(itemdata) > 2:
                         newitemdata.extend(itemdata[3:])
