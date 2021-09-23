@@ -691,7 +691,7 @@ class PikminObject(object):
                     assert_notlist(itemdata[3])
                     newitemdata.append([itemdata[3], "# Bridge type: 0=short, 1=slanted, 2=long"])
                     
-                    self.add_remaining_data_if_exists(newitemdata, itemdata, 3)
+                    self.add_remaining_data_if_exists(newitemdata, itemdata, 4)
                     
                 elif itemid == "{dgat}":
                     assert_notlist(itemdata[3])
