@@ -900,8 +900,8 @@ class GenEditor(QMainWindow):
             QApplication.clipboard().setText(", ".join(str(x) for x in self.current_coordinates))
 
     def action_update_position(self, event, pos):
-        self.current_coordinates = pos
-        self.statusbar.showMessage(str(pos))
+        self.current_coordinates = (pos[0], pos[1], -pos[2])
+        self.statusbar.showMessage(str(self.current_coordinates))
 
 
 class EditorHistory(object):
