@@ -298,7 +298,7 @@ class MapViewer(QWidget):
             startz = (-6000 - midz) * scalez
             endx = (6000 - midx) * scalex
             endz = (6000 - midz) * scalez
-            p.drawImage(QRect(startx, startz, endx-startx, endz-startz),
+            p.drawImage(QRect(int(startx), int(startz), int(endx-startx), int(endz-startz)),
                         self.level_image)
 
         pen = p.pen()
@@ -307,14 +307,14 @@ class MapViewer(QWidget):
         p.setPen(pen)
         # DRAW COORDINATE FIELD
         if True:#drawstartx <= 0 <= drawendx:
-            x = (0-midx)*scalex
+            x = int((0-midx)*scalex)
             #p.drawLine(QPoint(x-2,-5000), QPoint(x-2,+5000))
             #p.drawLine(QPoint(x-1,-5000), QPoint(x-1,+5000))
             p.drawLine(QPoint(x,-5000), QPoint(x,+5000))
             #p.drawLine(QPoint(x+1,-5000), QPoint(x+1,+5000))
             #p.drawLine(QPoint(x+2,-5000), QPoint(x+2,+5000))
         if True:#drawstartz <= 0 <= drawendz:
-            z = (0-midz)*scalez
+            z = int((0-midz)*scalez)
             #p.drawLine(QPoint(-5000, z-2), QPoint(+5000, z-2))
             #p.drawLine(QPoint(-5000, z-1), QPoint(+5000, z-1))
             p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
@@ -328,14 +328,14 @@ class MapViewer(QWidget):
         loop_startx = int(drawstartx-drawstartx%step)
         loop_endx = int((drawendxView+step) - (drawendxView+step) % step)
         for x in range(loop_startx, loop_endx + 4*500, 500):
-            x = (x-midx)*scalex
+            x = int((x-midx)*scalex)
             if 0 <= x <= w or True:
                 p.drawLine(QPoint(x, -5000), QPoint(x, +5000))
 
         loop_startz = int(drawstartz - drawstartz % step)
         loop_endz = int((drawendzView + step) - (drawendzView + step) % step)
         for z in range(loop_startz, loop_endz + 2*500, 500):
-            z = (z-midz)*scalez
+            z = int((z-midz)*scalez)
             if 0 <= z <= h or True:
                 p.drawLine(QPoint(-5000, z), QPoint(+5000, z))
 
@@ -353,7 +353,7 @@ class MapViewer(QWidget):
 
                 radius = radius*scalex
                 #x, z = offsetx + x*zf, offsetz + z*zf
-                x, z = (x-midx)*scalex, (z-midz)*scalez
+                x, z = int((x-midx)*scalex), int((z-midz)*scalez)
 
 
                 if last_color != color:
@@ -371,7 +371,7 @@ class MapViewer(QWidget):
                     pen.setWidth(2)
                     p.setPen(pen)
                     radius *= 2
-                    p.drawArc(x-radius//2, z-radius//2, radius, radius, 0, 16*360)
+                    p.drawArc(int(x-radius//2), int(z-radius//2), int(radius), int(radius), 0, 16*360)
                     pen.setWidth(prevwidth)
                     p.setPen(pen)
 
@@ -384,16 +384,16 @@ class MapViewer(QWidget):
             #for start_wp, end_wp in self.paths:
             for start_wp, linksto in links.items():
                 startx, y, startz, radius = waypoints[start_wp]
-                startx = (startx-midx)*scalex
-                startz = (startz-midz)*scalez
+                startx = int((startx-midx)*scalex)
+                startz = int((startz-midz)*scalez)
 
                 startpoint = QPoint(startx, startz)
 
                 for end_wp in linksto:
                     endx, y, endz, radius = waypoints[end_wp]
 
-                    endx = (endx-midx)*scalex
-                    endz = (endz-midz)*scalez
+                    endx = int((endx-midx)*scalex)
+                    endz = int((endz-midz)*scalez)
 
                     p.drawLine(startpoint,
                                QPoint(endx, endz))
@@ -401,8 +401,8 @@ class MapViewer(QWidget):
                     #angle = degrees(atan2(endx-startx, endz-startz))
                     angle = degrees(atan2(endz-startz, endx-startx))
 
-                    centerx, centery = (endx)*0.8 + (startx)*0.2, \
-                                       (endz)*0.8 + (startz)*0.2
+                    centerx, centery = int((endx)*0.8 + (startx)*0.2), \
+                                       int((endz)*0.8 + (startz)*0.2)
                     p1 = rotate(centerx-15, centery, centerx, centery, angle+40)
                     p2 = rotate(centerx-15, centery, centerx, centery, angle-40)
                     #p.setPen(QColor("green"))
@@ -438,11 +438,11 @@ class MapViewer(QWidget):
         p.setPen(pen)
 
         if self.selectionbox_start is not None and self.selectionbox_end is not None:
-            startx, startz = ((self.selectionbox_start[0] - midx)*scalex,
-                              (self.selectionbox_start[1] - midz)*scalez)
+            startx, startz = (int((self.selectionbox_start[0] - midx)*scalex),
+                              int((self.selectionbox_start[1] - midz)*scalez))
 
-            endx, endz = (  (self.selectionbox_end[0] - midx)*scalex,
-                            (self.selectionbox_end[1] - midz)*scalez)
+            endx, endz = (  int((self.selectionbox_end[0] - midx)*scalex),
+                            int((self.selectionbox_end[1] - midz)*scalez))
 
             startpoint, endpoint = QPoint(startx, startz), QPoint(endx, endz)
 
@@ -453,12 +453,12 @@ class MapViewer(QWidget):
             p.drawPolyline(selectionbox_polygon)
         if self.highlighttriangle is not None:
             p1, p2, p3 = self.highlighttriangle
-            p1x = (p1[0] - midx)*scalex
-            p2x = (p2[0] - midx)*scalex
-            p3x = (p3[0] - midx)*scalex
-            p1z = (p1[2] - midz)*scalez
-            p2z = (p2[2] - midz)*scalez
-            p3z = (p3[2] - midz)*scalez
+            p1x = int((p1[0] - midx)*scalex)
+            p2x = int((p2[0] - midx)*scalex)
+            p3x = int((p3[0] - midx)*scalex)
+            p1z = int((p1[2] - midz)*scalez)
+            p2z = int((p2[2] - midz)*scalez)
+            p3z = int((p3[2] - midz)*scalez)
 
             selectionbox_polygon = QPolygon([QPoint(p1x, p1z), QPoint(p2x, p2z), QPoint(p3x, p3z),
                                              QPoint(p1x, p1z)])
