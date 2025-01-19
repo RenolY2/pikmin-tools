@@ -1,0 +1,27 @@
+{
+	{v0.3} 	# version
+	0 	# reserved
+	0 	# 復活日数
+	131 73 131 73 131 67 131 107 130 147 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 	# <オオイヌｓ>
+	-1473.308716 -50.000000 1927.751709 	# pos
+	0.000000 0.000000 0.000000 	# offset
+	{teki} {0005} 	22 # Teki identifier, see https://pikmintkb.com/wiki/Pikmin_2_identifiers
+	0 		# teki_birth_type 
+	1 		# teki_num 
+	180.000000 		# face direction 
+	1 		# 0:point 1:circle 
+	100.000000 		# appear radius 
+	0.000000 		# enemy size 
+	0 # お宝アイテムコード
+	3 		# Pellet color 
+	1 		# Pellet size 
+	1 		# Pellet Min 
+	8 		# Pellet Max 
+	0.000000 		# Pellet Min 
+	{0000}
+	100.0		# distance between wire nodes
+	# gen base
+	{
+		{_eof} 
+	}
+}
